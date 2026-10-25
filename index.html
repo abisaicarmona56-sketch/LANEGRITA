@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>POS Taquería La Negrita</title>
+    <style>
+        :root {
+            --primary: #c0392b;
+            --primary-dark: #962d22;
+            --success: #27ae60;
+            --bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --text: #2c3e50;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            padding-bottom: 220px;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 16px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .mesa-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .mesa-bar label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .mesa-bar select {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            background: #fff;
+        }
+
+        .container {
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .producto-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 110px;
+            border: 1px solid #eef2f5;
+            user-select: none;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .producto-card:active {
+            transform: scale(0.97);
+            background: #fdf5f4;
+        }
+
+        .producto-nombre {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-bottom: 4px;
+        }
+
+        .producto-precio {
+            color: #7f8c8d;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        /* Barra flotante inferior de la orden */
+        .orden-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 2px solid #e1e8ed;
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
+            padding: 14px 16px;
+            z-index: 200;
+            max-height: 50vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .orden-lista {
+            overflow-y: auto;
+            max-height: 120px;
+            margin-bottom: 10px;
+        }
+
+        .orden-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px dashed #eee;
+            font-size: 0.95rem;
+        }
+
+        .item-info {
+            flex: 1;
+        }
+
+        .item-notas {
+            font-size: 0.8rem;
+            color: #e67e22;
+        }
+
+        .item-controles {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-qty {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .orden-acciones {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-enviar {
+            flex: 2;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            cursor: pointer;
+            box-shadow: 0 3px 6px rgba(192, 57, 43, 0.3);
+        }
+
+        .btn-enviar:active {
+            background: var(--primary-dark);
+        }
+
+        .btn-cuenta {
+            flex: 1;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .total-badge {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 1.05rem;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>🌮 Taquería La Negrita</header>
+
+    <div class="mesa-bar">
+        <label for="selectMesa">Mesa/Pedido:</label>
+        <select id="selectMesa">
+            <option value="Mesa 1">Mesa 1</option>
+            <option value="Mesa 2">Mesa 2</option>
+            <option value="Mesa 3">Mesa 3</option>
+            <option value="Mesa 4">Mesa 4</option>
+            <option value="Para Llevar">Para Llevar</option>
+            <option value="Barra">Barra</option>
+        </select>
+    </div>
+
+    <!-- Menú de Platillos -->
+    <div class="container" id="menuContainer"></div>
+
+    <!-- Panel de Orden Activa -->
+    <div class="orden-panel">
+        <div class="total-badge">
+            <span id="cantTotal">0 productos</span>
+            <span id="montoTotal">$0.00</span>
+        </div>
+        <div class="orden-lista" id="ordenItems">
+            <div style="text-align: center; color: #95a5a6; padding: 10px;">Selecciona productos para armar la comanda</div>
+        </div>
+        <div class="orden-acciones">
+            <button class="btn-enviar" onclick="enviarOrden('COMANDA')">🔥 Mandar al Taquero</button>
+            <button class="btn-cuenta" onclick="enviarOrden('CUENTA')">🧾 Cuenta</button>
+        </div>
+    </div>
+
+    <script>
+        // IP de tu computadora con el puerto donde corre printer_server.py
+        const SERVIDOR_IMPRESION = "http://192.168.1.9:8080/imprimir";
+
+        // Catálogo de productos
+        const MENU = [
+            { id: 1, nombre: "Taco de Pastor", precio: 18 },
+            { id: 2, nombre: "Taco de Suadero", precio: 20 },
+            { id: 3, nombre: "Taco de Tripa", precio: 22 },
+            { id: 4, nombre: "Taco de Longaniza", precio: 18 },
+            { id: 5, nombre: "Taco Campechano", precio: 22 },
+            { id: 6, nombre: "Gringa de Pastor", precio: 45 },
+            { id: 7, nombre: "Costra de Queso", precio: 40 },
+            { id: 8, nombre: "Refresco 355ml", precio: 25 },
+            { id: 9, nombre: "Agua de Sabor 1L", precio: 30 }
+        ];
+
+        let ordenActual = [];
+
+        // Renderizar botones del menú
+        function renderMenu() {
+            const container = document.getElementById("menuContainer");
+            container.innerHTML = MENU.map(item => `
+                <div class="producto-card" onclick="agregarProducto(${item.id})">
+                    <div class="producto-nombre">${item.nombre}</div>
+                    <div class="producto-precio">$${item.precio}</div>
+                </div>
+            `).join('');
+        }
+
+        // Agregar producto a la orden
+        function agregarProducto(id) {
+            const item = MENU.find(p => p.id === id);
+            const index = ordenActual.findIndex(p => p.id === id);
+
+            if (index > -1) {
+                ordenActual[index].cant += 1;
+            } else {
+                ordenActual.push({
+                    id: item.id,
+                    nombre: item.nombre,
+                    precio: item.precio,
+                    cant: 1,
+                    notas: ""
+                });
+            }
+            actualizarVistaOrden();
+        }
+
+        // Modificar cantidad
+        function cambiarCantidad(id, delta) {
+            const index = ordenActual.findIndex(p => p.id === id);
+            if (index > -1) {
+                ordenActual[index].cant += delta;
+                if (ordenActual[index].cant <= 0) {
+                    ordenActual.splice(index, 1);
+                }
+            }
+            actualizarVistaOrden();
+        }
+
+        // Agregar o editar notas (ej: sin cebolla, bien dorado)
+        function editarNota(id) {
+            const prod = ordenActual.find(p => p.id === id);
+            if (!prod) return;
+            const nota = prompt(`Notas para ${prod.nombre} (ej: sin verdura, doradito):`, prod.notas);
+            if (nota !== null) {
+                prod.notas = nota.trim();
+                actualizarVistaOrden();
+            }
+        }
+
+        // Actualizar interfaz del resumen inferior
+        function actualizarVistaOrden() {
+            const lista = document.getElementById("ordenItems");
+            const totalProductos = ordenActual.reduce((acc, p) => acc + p.cant, 0);
+            const totalDinero = ordenActual.reduce((acc, p) => acc + (p.cant * p.precio), 0);
+
+            document.getElementById("cantTotal").innerText = `${totalProductos} platillos`;
+            document.getElementById("montoTotal").innerText = `$${totalDinero.toFixed(2)}`;
+
+            if (ordenActual.length === 0) {
+                lista.innerHTML = `<div style="text-align: center; color: #95a5a6; padding: 10px;">Selecciona productos para armar la comanda</div>`;
+                return;
+            }
+
+            lista.innerHTML = ordenActual.map(p => `
+                <div class="orden-item">
+                    <div class="item-info" onclick="editarNota(${p.id})">
+                        <strong>${p.nombre}</strong>
+                        ${p.notas ? `<div class="item-notas">✎ ${p.notas}</div>` : `<div style="font-size:0.75rem; color:#aaa;">+ Agregar nota</div>`}
+                    </div>
+                    <div class="item-controles">
+                        <button class="btn-qty" onclick="cambiarCantidad(${p.id}, -1)">-</button>
+                        <span>${p.cant}</span>
+                        <button class="btn-qty" onclick="cambiarCantidad(${p.id}, 1)">+</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Función que envía los datos a printer_server.py
+        async function enviarOrden(tipo) {
+            if (ordenActual.length === 0) {
+                alert("La orden está vacía.");
+                return;
+            }
+
+            const mesa = document.getElementById("selectMesa").value;
+            const total = ordenActual.reduce((acc, p) => acc + (p.cant * p.precio), 0);
+
+            const payload = {
+                tipo: tipo,
+                ubicacion: mesa,
+                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                orden: ordenActual.map(p => ({
+                    cant: p.cant,
+                    nombre: p.nombre,
+                    notas: p.notas
+                })),
+                total: total
+            };
+
+            try {
+                const res = await fetch(SERVIDOR_IMPRESION, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert(tipo === "COMANDA" ? "¡Comanda enviada al taquero!" : "¡Cuenta impresa!");
+                    ordenActual = [];
+                    actualizarVistaOrden();
+                } else {
+                    alert("Error en el servidor de impresión.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("No se pudo conectar con la impresora. Verifica que la computadora esté encendida con el script activo.");
+            }
+        }
+
+        renderMenu();
+    </script>
+</body>
+</html>
