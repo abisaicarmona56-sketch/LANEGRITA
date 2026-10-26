@@ -6,12 +6,13 @@
     <title>POS Taquería La Negrita</title>
     <style>
         :root {
-            --primary: #c0392b;
-            --primary-dark: #962d22;
-            --success: #27ae60;
-            --bg: #f4f6f9;
-            --card-bg: #ffffff;
-            --text: #2c3e50;
+            --primary: #b71c1c;
+            --primary-dark: #7f0000;
+            --secondary: #263238;
+            --accent: #ff9800;
+            --bg: #f5f6fa;
+            --white: #ffffff;
+            --border: #cfd8dc;
         }
 
         * {
@@ -24,341 +25,643 @@
 
         body {
             background: var(--bg);
-            color: var(--text);
-            padding-bottom: 220px;
+            color: #2c3e50;
+            padding-bottom: 230px;
         }
 
         header {
             background: var(--primary);
             color: white;
-            padding: 16px;
-            text-align: center;
-            font-weight: 700;
-            font-size: 1.25rem;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
 
-        .mesa-bar {
+        header h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .mesa-selector {
+            background: #fff;
+            padding: 10px 16px;
             display: flex;
             align-items: center;
             gap: 10px;
-            background: #fff;
-            padding: 12px 16px;
-            border-bottom: 1px solid #e1e8ed;
+            border-bottom: 1px solid var(--border);
         }
 
-        .mesa-bar label {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        .mesa-bar select {
+        .mesa-selector select {
             flex: 1;
             padding: 10px;
             border-radius: 8px;
-            border: 1px solid #ccc;
+            border: 1px solid #90a4ae;
             font-size: 1rem;
+            font-weight: 600;
             background: #fff;
         }
 
-        .container {
-            padding: 16px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 12px;
+        /* Pestañas de categorías */
+        .categorias-bar {
+            display: flex;
+            overflow-x: auto;
+            background: #eceff1;
+            padding: 8px 12px;
+            gap: 8px;
+            white-space: nowrap;
+            scrollbar-width: none;
         }
 
-        .producto-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 14px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        .categorias-bar::-webkit-scrollbar { display: none; }
+
+        .btn-tab {
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid #b0bec5;
+            background: white;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .menu-grid {
+            padding: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+            gap: 10px;
+        }
+
+        .card-prod {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-height: 110px;
-            border: 1px solid #eef2f5;
-            user-select: none;
+            min-height: 95px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
             cursor: pointer;
-            transition: transform 0.1s ease;
         }
 
-        .producto-card:active {
-            transform: scale(0.97);
-            background: #fdf5f4;
+        .card-prod:active {
+            background: #ffebee;
+            transform: scale(0.98);
         }
 
-        .producto-nombre {
-            font-weight: 700;
-            font-size: 1.05rem;
+        .prod-nombre {
+            font-weight: bold;
+            font-size: 0.95rem;
             margin-bottom: 4px;
         }
 
-        .producto-precio {
-            color: #7f8c8d;
-            font-size: 0.95rem;
-            font-weight: 600;
+        .prod-precio {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 1rem;
         }
 
-        /* Barra flotante inferior de la orden */
-        .orden-panel {
+        /* Panel inferior de comanda */
+        .comanda-panel {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
             background: white;
-            border-top: 2px solid #e1e8ed;
-            box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
-            padding: 14px 16px;
-            z-index: 200;
-            max-height: 50vh;
-            display: flex;
-            flex-direction: column;
+            border-top: 2px solid var(--border);
+            padding: 12px 16px;
+            z-index: 150;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
         }
 
-        .orden-lista {
-            overflow-y: auto;
-            max-height: 120px;
-            margin-bottom: 10px;
-        }
-
-        .orden-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 0;
-            border-bottom: 1px dashed #eee;
-            font-size: 0.95rem;
-        }
-
-        .item-info {
-            flex: 1;
-        }
-
-        .item-notas {
-            font-size: 0.8rem;
-            color: #e67e22;
-        }
-
-        .item-controles {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-qty {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: 1px solid #ccc;
-            background: #f8f9fa;
-            font-weight: bold;
-            font-size: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        .orden-acciones {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn-enviar {
-            flex: 2;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 14px;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 1.05rem;
-            cursor: pointer;
-            box-shadow: 0 3px 6px rgba(192, 57, 43, 0.3);
-        }
-
-        .btn-enviar:active {
-            background: var(--primary-dark);
-        }
-
-        .btn-cuenta {
-            flex: 1;
-            background: #2c3e50;
-            color: white;
-            border: none;
-            padding: 14px;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            cursor: pointer;
-        }
-
-        .total-badge {
+        .totales-row {
             display: flex;
             justify-content: space-between;
             font-weight: bold;
             font-size: 1.05rem;
             margin-bottom: 8px;
         }
+
+        .lista-articulos {
+            max-height: 110px;
+            overflow-y: auto;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px dashed #f0f0f0;
+            font-size: 0.9rem;
+        }
+
+        .item-row.impreso {
+            color: #78909c;
+        }
+
+        .btn-qty {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1px solid #bbb;
+            background: #f8f9fa;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .acciones-bar {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-comanda {
+            flex: 2;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 13px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .btn-cuenta {
+            flex: 1.2;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            padding: 13px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .btn-limpiar {
+            background: #eceff1;
+            color: #455a64;
+            border: none;
+            padding: 13px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        /* Modal para opciones (Carnes / Verdura) */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 300;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 420px;
+            border-radius: 12px;
+            padding: 18px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-weight: bold;
+            font-size: 1.15rem;
+            margin-bottom: 12px;
+        }
+
+        .carnes-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .check-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: 1px solid #e0e0e0;
+        }
+
+        .check-btn input {
+            transform: scale(1.2);
+        }
+
+        .opciones-verdura {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .btn-verdura {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #b0bec5;
+            border-radius: 6px;
+            background: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-verdura.active {
+            background: #2e7d32;
+            color: white;
+            border-color: #2e7d32;
+        }
+
+        .modal-btn-confirm {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-    <header>🌮 Taquería La Negrita</header>
+    <header>
+        <h1>🌮 Taquería La Negrita</h1>
+        <span style="font-size: 0.8rem; opacity: 0.9;">POS Móvil</span>
+    </header>
 
-    <div class="mesa-bar">
-        <label for="selectMesa">Mesa/Pedido:</label>
-        <select id="selectMesa">
+    <div class="mesa-selector">
+        <label for="selectMesa"><strong>Mesa:</strong></label>
+        <select id="selectMesa" onchange="cambiarMesa()">
             <option value="Mesa 1">Mesa 1</option>
             <option value="Mesa 2">Mesa 2</option>
             <option value="Mesa 3">Mesa 3</option>
             <option value="Mesa 4">Mesa 4</option>
-            <option value="Para Llevar">Para Llevar</option>
+            <option value="Mesa 5">Mesa 5</option>
+            <option value="Mesa 6">Mesa 6</option>
             <option value="Barra">Barra</option>
+            <option value="Para Llevar">Para Llevar</option>
         </select>
     </div>
 
-    <!-- Menú de Platillos -->
-    <div class="container" id="menuContainer"></div>
+    <!-- Pestañas de categorías -->
+    <div class="categorias-bar">
+        <button class="btn-tab active" onclick="filtrarCategoria('tacos')">Tacos y Carnitas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('tortas')">Tortas y Antojitos</button>
+        <button class="btn-tab" onclick="filtrarCategoria('quesadillas')">Quesadillas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('bebidas')">Bebidas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('postres')">Postres</button>
+    </div>
 
-    <!-- Panel de Orden Activa -->
-    <div class="orden-panel">
-        <div class="total-badge">
-            <span id="cantTotal">0 productos</span>
-            <span id="montoTotal">$0.00</span>
+    <!-- Grid de productos -->
+    <div class="menu-grid" id="menuGrid"></div>
+
+    <!-- Panel de Comanda Activa -->
+    <div class="comanda-panel">
+        <div class="totales-row">
+            <span id="cantPendiente">0 por mandar</span>
+            <span id="montoTotalMesa">Total: $0.00</span>
         </div>
-        <div class="orden-lista" id="ordenItems">
-            <div style="text-align: center; color: #95a5a6; padding: 10px;">Selecciona productos para armar la comanda</div>
+        <div class="lista-articulos" id="listaArticulos">
+            <div style="text-align: center; color: #90a4ae; font-size: 0.85rem; padding: 10px;">Selecciona productos para armar comanda</div>
         </div>
-        <div class="orden-acciones">
-            <button class="btn-enviar" onclick="enviarOrden('COMANDA')">🔥 Mandar al Taquero</button>
-            <button class="btn-cuenta" onclick="enviarOrden('CUENTA')">🧾 Cuenta</button>
+        <div class="acciones-bar">
+            <button class="btn-limpiar" onclick="cerrarMesa()">Liberar Mesa</button>
+            <button class="btn-cuenta" onclick="imprimirCuenta()">🧾 Cuenta</button>
+            <button class="btn-comanda" onclick="mandarComanda()">🔥 Mandar al Taquero</button>
+        </div>
+    </div>
+
+    <!-- Modal para personalizar carnes y verdura -->
+    <div class="modal" id="modalOpciones">
+        <div class="modal-content">
+            <div class="modal-header" id="modalTitulo">Personalizar</div>
+            
+            <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Selecciona tipo de carne (puedes combinar):</p>
+            <div class="carnes-grid" id="carnesContainer"></div>
+
+            <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Preparación (Verdura):</p>
+            <div class="opciones-verdura">
+                <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
+                <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
+                <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
+                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Solo carne</button>
+            </div>
+
+            <input type="text" id="notaExtra" placeholder="Nota extra (ej: doradito, poca grasa)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem;">
+
+            <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la comanda</button>
         </div>
     </div>
 
     <script>
-        // IP de tu computadora con el puerto donde corre printer_server.py
+        // Servidor Python que escucha en la computadora host
         const SERVIDOR_IMPRESION = "http://192.168.1.9:8080/imprimir";
 
-        // Catálogo de productos
-        const MENU = [
-            { id: 1, nombre: "Taco de Pastor", precio: 18 },
-            { id: 2, nombre: "Taco de Suadero", precio: 20 },
-            { id: 3, nombre: "Taco de Tripa", precio: 22 },
-            { id: 4, nombre: "Taco de Longaniza", precio: 18 },
-            { id: 5, nombre: "Taco Campechano", precio: 22 },
-            { id: 6, nombre: "Gringa de Pastor", precio: 45 },
-            { id: 7, nombre: "Costra de Queso", precio: 40 },
-            { id: 8, nombre: "Refresco 355ml", precio: 25 },
-            { id: 9, nombre: "Agua de Sabor 1L", precio: 30 }
+        // Carnes disponibles para combinar según la lona
+        const TIPOS_CARNE = [
+            "Maciza", "Costilla", "Buche", "Surtido", 
+            "Cuerito", "Barriga", "Hígado", "Trompa", 
+            "Oreja", "Lengua", "Chamorro"
         ];
 
-        let ordenActual = [];
+        // Catálogo extraído de la lona
+        const PRODUCTOS = [
+            // Tacos y Carnitas
+            { id: 101, cat: 'tacos', nombre: 'Taco de Carnitas', precio: 20, llevaCarne: true },
+            { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, llevaCarne: false },
+            { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, llevaCarne: false },
+            { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, llevaCarne: false },
+            { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, llevaCarne: false },
+            { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, llevaCarne: false },
+            { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, llevaCarne: true },
+            { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla picada revuelta)', precio: 20, llevaCarne: true },
+            { id: 109, cat: 'tacos', nombre: 'Carnitas por Kg', precio: 450, llevaCarne: true },
+            { id: 110, cat: 'tacos', nombre: 'Chamorro por pieza', precio: 200, llevaCarne: false },
 
-        // Renderizar botones del menú
-        function renderMenu() {
-            const container = document.getElementById("menuContainer");
-            container.innerHTML = MENU.map(item => `
-                <div class="producto-card" onclick="agregarProducto(${item.id})">
-                    <div class="producto-nombre">${item.nombre}</div>
-                    <div class="producto-precio">$${item.precio}</div>
+            // Tortas y Antojitos
+            { id: 201, cat: 'tortas', nombre: 'Torta', precio: 55, llevaCarne: true },
+            { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, llevaCarne: false },
+            { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, llevaCarne: false },
+            { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, llevaCarne: true },
+            { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, llevaCarne: false },
+            { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, llevaCarne: true },
+            { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, llevaCarne: false },
+            { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, llevaCarne: true },
+            { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, llevaCarne: false },
+            { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, llevaCarne: true },
+            { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, llevaCarne: true },
+            { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, llevaCarne: false },
+            { id: 213, cat: 'tortas', nombre: 'Orden Extra Salsa', precio: 25, llevaCarne: false },
+            { id: 214, cat: 'tortas', nombre: 'Orden Habanero', precio: 25, llevaCarne: false },
+            { id: 215, cat: 'tortas', nombre: 'Orden Guacamole', precio: 30, llevaCarne: false },
+
+            // Quesadillas
+            { id: 301, cat: 'quesadillas', nombre: 'Sesadilla', precio: 25, llevaCarne: false },
+            { id: 302, cat: 'quesadillas', nombre: 'Sesadilla Especial', precio: 45, llevaCarne: false },
+            { id: 303, cat: 'quesadillas', nombre: 'Quesadilla Queso (Harina)', precio: 30, llevaCarne: false },
+            { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, llevaCarne: true },
+
+            // Bebidas
+            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, llevaCarne: false },
+            { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, llevaCarne: false },
+            { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, llevaCarne: false },
+            { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, llevaCarne: false },
+            { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, llevaCarne: false },
+            { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, llevaCarne: false },
+
+            // Postres
+            { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, llevaCarne: false },
+            { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, llevaCarne: false },
+            { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, llevaCarne: false }
+        ];
+
+        // Estado persistente de todas las mesas en el navegador
+        let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
+        let mesaActual = "Mesa 1";
+        let productoSeleccionado = null;
+        let opcionVerduraSeleccionada = "Con Todo";
+
+        function guardarEnAlmacenamiento() {
+            localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+        }
+
+        function obtenerMesaActual() {
+            if (!cuentasMesas[mesaActual]) {
+                cuentasMesas[mesaActual] = [];
+            }
+            return cuentasMesas[mesaActual];
+        }
+
+        // Renderizado del catálogo
+        function filtrarCategoria(categoria) {
+            document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const container = document.getElementById("menuGrid");
+            const prods = PRODUCTOS.filter(p => p.cat === categoria);
+
+            container.innerHTML = prods.map(p => `
+                <div class="card-prod" onclick="iniciarAgregar(${p.id})">
+                    <div class="prod-nombre">${p.nombre}</div>
+                    <div class="prod-precio">$${p.precio}</div>
                 </div>
             `).join('');
         }
 
-        // Agregar producto a la orden
-        function agregarProducto(id) {
-            const item = MENU.find(p => p.id === id);
-            const index = ordenActual.findIndex(p => p.id === id);
+        // Flujo de agregar producto
+        function iniciarAgregar(id) {
+            const prod = PRODUCTOS.find(p => p.id === id);
+            if (!prod) return;
 
-            if (index > -1) {
-                ordenActual[index].cant += 1;
+            if (prod.llevaCarne) {
+                productoSeleccionado = prod;
+                abrirModalOpciones(prod);
             } else {
-                ordenActual.push({
-                    id: item.id,
-                    nombre: item.nombre,
-                    precio: item.precio,
+                agregarDirecto(prod.nombre, prod.precio, "");
+            }
+        }
+
+        function abrirModalOpciones(prod) {
+            document.getElementById("modalTitulo").innerText = prod.nombre;
+            const container = document.getElementById("carnesContainer");
+            container.innerHTML = TIPOS_CARNE.map(c => `
+                <label class="check-btn">
+                    <input type="checkbox" name="carneCheck" value="${c}">
+                    <span>${c}</span>
+                </label>
+            `).join('');
+            
+            setVerdura('Con Todo');
+            document.getElementById("notaExtra").value = "";
+            document.getElementById("modalOpciones").style.display = "flex";
+        }
+
+        function setVerdura(tipo) {
+            opcionVerduraSeleccionada = tipo;
+            document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
+            if (tipo === 'Con Todo') document.getElementById('vTodo').classList.add('active');
+            if (tipo === 'Sin cebolla') document.getElementById('vSinCeb').classList.add('active');
+            if (tipo === 'Sin cilantro') document.getElementById('vSinCil').classList.add('active');
+            if (tipo === 'Solo carne') document.getElementById('vSolo').classList.add('active');
+        }
+
+        function confirmarAgregarConOpciones() {
+            const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
+            const notaExtra = document.getElementById("notaExtra").value.trim();
+
+            let descripcionCarne = "";
+            if (checks.length === 1) {
+                descripcionCarne = checks[0];
+            } else if (checks.length > 1) {
+                descripcionCarne = "Combinado (" + checks.join('/') + ")";
+            } else {
+                descripcionCarne = "Surtido";
+            }
+
+            let detalleFinal = `${descripcionCarne} - ${opcionVerduraSeleccionada}`;
+            if (notaExtra) detalleFinal += ` (${notaExtra})`;
+
+            agregarDirecto(productoSeleccionado.nombre, productoSeleccionado.precio, detalleFinal);
+            document.getElementById("modalOpciones").style.display = "none";
+        }
+
+        function agregarDirecto(nombre, precio, notas) {
+            const cuenta = obtenerMesaActual();
+            const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso);
+
+            if (existente) {
+                existente.cant += 1;
+            } else {
+                cuenta.push({
+                    idTemp: Date.now() + Math.random(),
+                    nombre: nombre,
+                    precio: precio,
                     cant: 1,
-                    notas: ""
+                    notas: notas,
+                    impreso: false // Marca si ya fue enviado a cocina
                 });
             }
-            actualizarVistaOrden();
+
+            guardarEnAlmacenamiento();
+            renderComanda();
         }
 
-        // Modificar cantidad
-        function cambiarCantidad(id, delta) {
-            const index = ordenActual.findIndex(p => p.id === id);
+        function cambiarCantidad(idTemp, delta) {
+            const cuenta = obtenerMesaActual();
+            const index = cuenta.findIndex(item => item.idTemp === idTemp);
             if (index > -1) {
-                ordenActual[index].cant += delta;
-                if (ordenActual[index].cant <= 0) {
-                    ordenActual.splice(index, 1);
+                cuenta[index].cant += delta;
+                if (cuenta[index].cant <= 0) {
+                    cuenta.splice(index, 1);
                 }
             }
-            actualizarVistaOrden();
+            guardarEnAlmacenamiento();
+            renderComanda();
         }
 
-        // Agregar o editar notas (ej: sin cebolla, bien dorado)
-        function editarNota(id) {
-            const prod = ordenActual.find(p => p.id === id);
-            if (!prod) return;
-            const nota = prompt(`Notas para ${prod.nombre} (ej: sin verdura, doradito):`, prod.notas);
-            if (nota !== null) {
-                prod.notas = nota.trim();
-                actualizarVistaOrden();
-            }
-        }
+        function renderComanda() {
+            const cuenta = obtenerMesaActual();
+            const lista = document.getElementById("listaArticulos");
 
-        // Actualizar interfaz del resumen inferior
-        function actualizarVistaOrden() {
-            const lista = document.getElementById("ordenItems");
-            const totalProductos = ordenActual.reduce((acc, p) => acc + p.cant, 0);
-            const totalDinero = ordenActual.reduce((acc, p) => acc + (p.cant * p.precio), 0);
+            const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
+            const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
-            document.getElementById("cantTotal").innerText = `${totalProductos} platillos`;
-            document.getElementById("montoTotal").innerText = `$${totalDinero.toFixed(2)}`;
+            document.getElementById("cantPendiente").innerText = `${pendientes} nuevos por comanda`;
+            document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
 
-            if (ordenActual.length === 0) {
-                lista.innerHTML = `<div style="text-align: center; color: #95a5a6; padding: 10px;">Selecciona productos para armar la comanda</div>`;
+            if (cuenta.length === 0) {
+                lista.innerHTML = `<div style="text-align: center; color: #90a4ae; font-size: 0.85rem; padding: 10px;">Selecciona productos para armar comanda</div>`;
                 return;
             }
 
-            lista.innerHTML = ordenActual.map(p => `
-                <div class="orden-item">
-                    <div class="item-info" onclick="editarNota(${p.id})">
-                        <strong>${p.nombre}</strong>
-                        ${p.notas ? `<div class="item-notas">✎ ${p.notas}</div>` : `<div style="font-size:0.75rem; color:#aaa;">+ Agregar nota</div>`}
+            lista.innerHTML = cuenta.map(item => `
+                <div class="item-row ${item.impreso ? 'impreso' : ''}">
+                    <div style="flex: 1;">
+                        <strong>${item.nombre}</strong> ${item.impreso ? '✓' : ''}
+                        ${item.notas ? `<div style="font-size:0.75rem; color:#e67e22;">${item.notas}</div>` : ''}
                     </div>
-                    <div class="item-controles">
-                        <button class="btn-qty" onclick="cambiarCantidad(${p.id}, -1)">-</button>
-                        <span>${p.cant}</span>
-                        <button class="btn-qty" onclick="cambiarCantidad(${p.id}, 1)">+</button>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>` : ''}
+                        <span>${item.cant}</span>
+                        ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>` : ''}
+                        <span style="font-weight:bold; min-width:45px; text-align:right;">$${item.cant * item.precio}</span>
                     </div>
                 </div>
             `).join('');
         }
 
-        // Función que envía los datos a printer_server.py
-        async function enviarOrden(tipo) {
-            if (ordenActual.length === 0) {
-                alert("La orden está vacía.");
+        function cambiarMesa() {
+            mesaActual = document.getElementById("selectMesa").value;
+            renderComanda();
+        }
+
+        // Manda únicamente los tacos y platillos pendientes a cocina (sin re-imprimir los viejos)
+        async function mandarComanda() {
+            const cuenta = obtenerMesaActual();
+            const nuevos = cuenta.filter(i => !i.impreso);
+
+            if (nuevos.length === 0) {
+                alert("No hay productos nuevos para enviar a cocina.");
                 return;
             }
 
-            const mesa = document.getElementById("selectMesa").value;
-            const total = ordenActual.reduce((acc, p) => acc + (p.cant * p.precio), 0);
+            const payload = {
+                tipo: "COMANDA",
+                ubicacion: mesaActual,
+                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                orden: nuevos.map(i => ({
+                    cant: i.cant,
+                    nombre: i.nombre,
+                    notas: i.notas
+                }))
+            };
+
+            try {
+                const res = await fetch(SERVIDOR_IMPRESION, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    // Marcamos los artículos como enviados para no reimprimirlos después
+                    nuevos.forEach(i => i.impreso = true);
+                    guardarEnAlmacenamiento();
+                    renderComanda();
+                    alert("¡Ticket enviado a cocina!");
+                } else {
+                    alert("Error en el servidor de impresión.");
+                }
+            } catch (err) {
+                alert("Error de conexión: verifica que la computadora con Python esté encendida en la misma red Wi-Fi.");
+            }
+        }
+
+        // Imprime el total y desglose de toda la mesa acumulada
+        async function imprimirCuenta() {
+            const cuenta = obtenerMesaActual();
+            if (cuenta.length === 0) {
+                alert("La mesa no tiene consumo registrado.");
+                return;
+            }
+
+            const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
             const payload = {
-                tipo: tipo,
-                ubicacion: mesa,
-                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                orden: ordenActual.map(p => ({
-                    cant: p.cant,
-                    nombre: p.nombre,
-                    notas: p.notas
+                tipo: "CUENTA",
+                ubicacion: mesaActual,
+                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                orden: cuenta.map(i => ({
+                    cant: i.cant,
+                    nombre: `${i.nombre} ($${i.precio})`,
+                    notas: i.notas
                 })),
                 total: total
             };
@@ -371,19 +674,27 @@
                 });
 
                 if (res.ok) {
-                    alert(tipo === "COMANDA" ? "¡Comanda enviada al taquero!" : "¡Cuenta impresa!");
-                    ordenActual = [];
-                    actualizarVistaOrden();
+                    alert("¡Cuenta impresa!");
                 } else {
-                    alert("Error en el servidor de impresión.");
+                    alert("Error al imprimir la cuenta.");
                 }
             } catch (err) {
-                console.error(err);
-                alert("No se pudo conectar con la impresora. Verifica que la computadora esté encendida con el script activo.");
+                alert("Error de conexión con la impresora.");
             }
         }
 
-        renderMenu();
+        // Limpiar la mesa una vez que el cliente pagó y se fue
+        function cerrarMesa() {
+            if (confirm(`¿Deseas liquidar y vaciar la cuenta de ${mesaActual}?`)) {
+                cuentasMesas[mesaActual] = [];
+                guardarEnAlmacenamiento();
+                renderComanda();
+            }
+        }
+
+        // Inicialización
+        filtrarCategoria('tacos');
+        renderComanda();
     </script>
 </body>
 </html>
