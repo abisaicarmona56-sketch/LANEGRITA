@@ -9,9 +9,7 @@
             --primary: #b71c1c;
             --primary-dark: #7f0000;
             --secondary: #263238;
-            --accent: #ff9800;
             --bg: #f5f6fa;
-            --white: #ffffff;
             --border: #cfd8dc;
         }
 
@@ -26,7 +24,7 @@
         body {
             background: var(--bg);
             color: #2c3e50;
-            padding-bottom: 230px;
+            padding-bottom: 240px;
         }
 
         header {
@@ -66,7 +64,6 @@
             background: #fff;
         }
 
-        /* Pestañas de categorías */
         .categorias-bar {
             display: flex;
             overflow-x: auto;
@@ -132,7 +129,6 @@
             font-size: 1rem;
         }
 
-        /* Panel inferior de comanda */
         .comanda-panel {
             position: fixed;
             bottom: 0;
@@ -154,7 +150,7 @@
         }
 
         .lista-articulos {
-            max-height: 110px;
+            max-height: 120px;
             overflow-y: auto;
             border-bottom: 1px solid #eee;
             margin-bottom: 10px;
@@ -223,7 +219,7 @@
             font-weight: bold;
         }
 
-        /* Modal para opciones (Carnes / Verdura) */
+        /* Modal para opciones */
         .modal {
             display: none;
             position: fixed;
@@ -238,10 +234,10 @@
         .modal-content {
             background: white;
             width: 100%;
-            max-width: 420px;
+            max-width: 440px;
             border-radius: 12px;
             padding: 18px;
-            max-height: 85vh;
+            max-height: 90vh;
             overflow-y: auto;
         }
 
@@ -249,6 +245,29 @@
             font-weight: bold;
             font-size: 1.15rem;
             margin-bottom: 12px;
+        }
+
+        .peso-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .btn-peso {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #b0bec5;
+            background: #f8f9fa;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-peso.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
         }
 
         .carnes-grid {
@@ -276,19 +295,21 @@
 
         .opciones-verdura {
             display: flex;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 6px;
             margin-bottom: 14px;
         }
 
         .btn-verdura {
-            flex: 1;
-            padding: 8px;
+            flex: 1 1 45%;
+            padding: 10px 6px;
             border: 1px solid #b0bec5;
             border-radius: 6px;
             background: white;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
+            text-align: center;
         }
 
         .btn-verdura.active {
@@ -306,6 +327,7 @@
             border-radius: 8px;
             font-size: 1rem;
             font-weight: bold;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -330,7 +352,7 @@
         </select>
     </div>
 
-    <!-- Pestañas de categorías -->
+    <!-- Pestañas -->
     <div class="categorias-bar">
         <button class="btn-tab active" onclick="filtrarCategoria('tacos')">Tacos y Carnitas</button>
         <button class="btn-tab" onclick="filtrarCategoria('tortas')">Tortas y Antojitos</button>
@@ -342,7 +364,7 @@
     <!-- Grid de productos -->
     <div class="menu-grid" id="menuGrid"></div>
 
-    <!-- Panel de Comanda Activa -->
+    <!-- Panel Comanda -->
     <div class="comanda-panel">
         <div class="totales-row">
             <span id="cantPendiente">0 por mandar</span>
@@ -358,95 +380,110 @@
         </div>
     </div>
 
-    <!-- Modal para personalizar carnes y verdura -->
+    <!-- Modal para Opciones (Carnes, Kilos y Verdura) -->
     <div class="modal" id="modalOpciones">
         <div class="modal-content">
             <div class="modal-header" id="modalTitulo">Personalizar</div>
-            
-            <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Selecciona tipo de carne (puedes combinar):</p>
-            <div class="carnes-grid" id="carnesContainer"></div>
 
-            <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Preparación (Verdura):</p>
-            <div class="opciones-verdura">
-                <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
-                <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
-                <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
-                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Solo carne</button>
+            <!-- Selector de Kilos (solo para Carnitas por Kg) -->
+            <div id="seccionPeso" style="display: none;">
+                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Cantidad de Carnitas:</p>
+                <div class="peso-grid">
+                    <button type="button" class="btn-peso" onclick="setPeso(0.25, '1/4 Kg', 112.5)">1/4 Kg ($112.50)</button>
+                    <button type="button" class="btn-peso active" onclick="setPeso(0.5, '1/2 Kg', 225)">1/2 Kg ($225.00)</button>
+                    <button type="button" class="btn-peso" onclick="setPeso(0.75, '3/4 Kg', 337.5)">3/4 Kg ($337.50)</button>
+                    <button type="button" class="btn-peso" onclick="setPeso(1.0, '1 Kg', 450)">1 Kg ($450.00)</button>
+                </div>
+            </div>
+            
+            <!-- Selector de Carnes -->
+            <div id="seccionCarnes">
+                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Selecciona carne (puedes combinar):</p>
+                <div class="carnes-grid" id="carnesContainer"></div>
             </div>
 
-            <input type="text" id="notaExtra" placeholder="Nota extra (ej: doradito, poca grasa)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem;">
+            <!-- Selector de Verdura -->
+            <div id="seccionVerdura">
+                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px;">Verdura / Preparación:</p>
+                <div class="opciones-verdura">
+                    <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
+                    <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
+                    <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
+                    <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Solo carne</button>
+                </div>
+            </div>
 
-            <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la comanda</button>
+            <input type="text" id="notaExtra" placeholder="Nota extra (ej: doradito, poca grasa)" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem;">
+
+            <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
         </div>
     </div>
 
     <script>
-        // Servidor Python que escucha en la computadora host
         const SERVIDOR_IMPRESION = "http://192.168.1.9:8080/imprimir";
 
-        // Carnes disponibles para combinar según la lona
         const TIPOS_CARNE = [
             "Maciza", "Costilla", "Buche", "Surtido", 
             "Cuerito", "Barriga", "Hígado", "Trompa", 
             "Oreja", "Lengua", "Chamorro"
         ];
 
-        // Catálogo extraído de la lona
+        // Todos los elementos de comida tienen esComida: true para pedir verdura y nota
         const PRODUCTOS = [
             // Tacos y Carnitas
-            { id: 101, cat: 'tacos', nombre: 'Taco de Carnitas', precio: 20, llevaCarne: true },
-            { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, llevaCarne: false },
-            { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, llevaCarne: false },
-            { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, llevaCarne: false },
-            { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, llevaCarne: false },
-            { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, llevaCarne: false },
-            { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, llevaCarne: true },
-            { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla picada revuelta)', precio: 20, llevaCarne: true },
-            { id: 109, cat: 'tacos', nombre: 'Carnitas por Kg', precio: 450, llevaCarne: true },
-            { id: 110, cat: 'tacos', nombre: 'Chamorro por pieza', precio: 200, llevaCarne: false },
+            { id: 101, cat: 'tacos', nombre: 'Taco de Carnitas', precio: 20, esComida: true, llevaCarne: true },
+            { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, esComida: true, llevaCarne: false },
+            { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, esComida: true, llevaCarne: false },
+            { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, esComida: true, llevaCarne: false },
+            { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, esComida: true, llevaCarne: false },
+            { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, esComida: true, llevaCarne: false },
+            { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, esComida: true, llevaCarne: true },
+            { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla picada revuelta)', precio: 20, esComida: true, llevaCarne: true },
+            { id: 109, cat: 'tacos', nombre: 'Carnitas por Kg', precio: 450, esComida: true, llevaCarne: true, esPorKilo: true },
+            { id: 110, cat: 'tacos', nombre: 'Chamorro por pieza', precio: 200, esComida: true, llevaCarne: false },
 
             // Tortas y Antojitos
-            { id: 201, cat: 'tortas', nombre: 'Torta', precio: 55, llevaCarne: true },
-            { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, llevaCarne: false },
-            { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, llevaCarne: false },
-            { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, llevaCarne: true },
-            { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, llevaCarne: false },
-            { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, llevaCarne: true },
-            { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, llevaCarne: false },
-            { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, llevaCarne: true },
-            { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, llevaCarne: false },
-            { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, llevaCarne: true },
-            { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, llevaCarne: true },
-            { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, llevaCarne: false },
-            { id: 213, cat: 'tortas', nombre: 'Orden Extra Salsa', precio: 25, llevaCarne: false },
-            { id: 214, cat: 'tortas', nombre: 'Orden Habanero', precio: 25, llevaCarne: false },
-            { id: 215, cat: 'tortas', nombre: 'Orden Guacamole', precio: 30, llevaCarne: false },
+            { id: 201, cat: 'tortas', nombre: 'Torta', precio: 55, esComida: true, llevaCarne: true },
+            { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, esComida: true, llevaCarne: false },
+            { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, esComida: true, llevaCarne: false },
+            { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, esComida: true, llevaCarne: true },
+            { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, esComida: true, llevaCarne: false },
+            { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, esComida: true, llevaCarne: true },
+            { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false },
+            { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, esComida: true, llevaCarne: true },
+            { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, esComida: true, llevaCarne: false },
+            { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, esComida: true, llevaCarne: true },
+            { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, esComida: true, llevaCarne: true },
+            { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, esComida: false, llevaCarne: false },
+            { id: 213, cat: 'tortas', nombre: 'Orden Extra Salsa', precio: 25, esComida: false, llevaCarne: false },
+            { id: 214, cat: 'tortas', nombre: 'Orden Habanero', precio: 25, esComida: false, llevaCarne: false },
+            { id: 215, cat: 'tortas', nombre: 'Orden Guacamole', precio: 30, esComida: false, llevaCarne: false },
 
             // Quesadillas
-            { id: 301, cat: 'quesadillas', nombre: 'Sesadilla', precio: 25, llevaCarne: false },
-            { id: 302, cat: 'quesadillas', nombre: 'Sesadilla Especial', precio: 45, llevaCarne: false },
-            { id: 303, cat: 'quesadillas', nombre: 'Quesadilla Queso (Harina)', precio: 30, llevaCarne: false },
-            { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, llevaCarne: true },
+            { id: 301, cat: 'quesadillas', nombre: 'Sesadilla', precio: 25, esComida: true, llevaCarne: false },
+            { id: 302, cat: 'quesadillas', nombre: 'Sesadilla Especial', precio: 45, esComida: true, llevaCarne: false },
+            { id: 303, cat: 'quesadillas', nombre: 'Quesadilla Queso (Harina)', precio: 30, esComida: true, llevaCarne: false },
+            { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, esComida: true, llevaCarne: true },
 
             // Bebidas
-            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, llevaCarne: false },
-            { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, llevaCarne: false },
-            { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, llevaCarne: false },
-            { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, llevaCarne: false },
-            { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, llevaCarne: false },
-            { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, llevaCarne: false },
+            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, esComida: false, llevaCarne: false },
+            { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, esComida: false, llevaCarne: false },
+            { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, esComida: false, llevaCarne: false },
+            { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, esComida: false, llevaCarne: false },
+            { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, esComida: false, llevaCarne: false },
+            { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, esComida: false, llevaCarne: false },
 
             // Postres
-            { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, llevaCarne: false },
-            { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, llevaCarne: false },
-            { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, llevaCarne: false }
+            { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
+            { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
+            { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
         ];
 
-        // Estado persistente de todas las mesas en el navegador
         let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
         let mesaActual = "Mesa 1";
         let productoSeleccionado = null;
         let opcionVerduraSeleccionada = "Con Todo";
+        let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 
         function guardarEnAlmacenamiento() {
             localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
@@ -459,7 +496,6 @@
             return cuentasMesas[mesaActual];
         }
 
-        // Renderizado del catálogo
         function filtrarCategoria(categoria) {
             document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
@@ -475,12 +511,11 @@
             `).join('');
         }
 
-        // Flujo de agregar producto
         function iniciarAgregar(id) {
             const prod = PRODUCTOS.find(p => p.id === id);
             if (!prod) return;
 
-            if (prod.llevaCarne) {
+            if (prod.esComida) {
                 productoSeleccionado = prod;
                 abrirModalOpciones(prod);
             } else {
@@ -490,17 +525,41 @@
 
         function abrirModalOpciones(prod) {
             document.getElementById("modalTitulo").innerText = prod.nombre;
+            
+            // Si es Carnitas por kilo, mostrar selector de peso
+            const secPeso = document.getElementById("seccionPeso");
+            if (prod.esPorKilo) {
+                secPeso.style.display = "block";
+                setPeso(0.5, '1/2 Kg', 225);
+            } else {
+                secPeso.style.display = "none";
+            }
+
+            // Mostrar u ocultar sección de carnes
+            const secCarnes = document.getElementById("seccionCarnes");
             const container = document.getElementById("carnesContainer");
-            container.innerHTML = TIPOS_CARNE.map(c => `
-                <label class="check-btn">
-                    <input type="checkbox" name="carneCheck" value="${c}">
-                    <span>${c}</span>
-                </label>
-            `).join('');
+            if (prod.llevaCarne) {
+                secCarnes.style.display = "block";
+                container.innerHTML = TIPOS_CARNE.map(c => `
+                    <label class="check-btn">
+                        <input type="checkbox" name="carneCheck" value="${c}">
+                        <span>${c}</span>
+                    </label>
+                `).join('');
+            } else {
+                secCarnes.style.display = "none";
+                container.innerHTML = "";
+            }
             
             setVerdura('Con Todo');
             document.getElementById("notaExtra").value = "";
             document.getElementById("modalOpciones").style.display = "flex";
+        }
+
+        function setPeso(kilos, etiqueta, precio) {
+            pesoSeleccionado = { texto: etiqueta, precio: precio };
+            document.querySelectorAll('.btn-peso').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function setVerdura(tipo) {
@@ -513,22 +572,33 @@
         }
 
         function confirmarAgregarConOpciones() {
-            const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
-            const notaExtra = document.getElementById("notaExtra").value.trim();
+            let nombreFinal = productoSeleccionado.nombre;
+            let precioFinal = productoSeleccionado.precio;
 
-            let descripcionCarne = "";
-            if (checks.length === 1) {
-                descripcionCarne = checks[0];
-            } else if (checks.length > 1) {
-                descripcionCarne = "Combinado (" + checks.join('/') + ")";
-            } else {
-                descripcionCarne = "Surtido";
+            if (productoSeleccionado.esPorKilo) {
+                nombreFinal = `Carnitas (${pesoSeleccionado.texto})`;
+                precioFinal = pesoSeleccionado.precio;
             }
 
-            let detalleFinal = `${descripcionCarne} - ${opcionVerduraSeleccionada}`;
-            if (notaExtra) detalleFinal += ` (${notaExtra})`;
+            let detalle = [];
 
-            agregarDirecto(productoSeleccionado.nombre, productoSeleccionado.precio, detalleFinal);
+            if (productoSeleccionado.llevaCarne) {
+                const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
+                if (checks.length === 1) {
+                    detalle.push(checks[0]);
+                } else if (checks.length > 1) {
+                    detalle.push("Combinado: " + checks.join('/'));
+                } else {
+                    detalle.push("Surtido");
+                }
+            }
+
+            detalle.push(opcionVerduraSeleccionada);
+
+            const notaExtra = document.getElementById("notaExtra").value.trim();
+            if (notaExtra) detalle.push(`(${notaExtra})`);
+
+            agregarDirecto(nombreFinal, precioFinal, detalle.join(' - '));
             document.getElementById("modalOpciones").style.display = "none";
         }
 
@@ -545,7 +615,7 @@
                     precio: precio,
                     cant: 1,
                     notas: notas,
-                    impreso: false // Marca si ya fue enviado a cocina
+                    impreso: false
                 });
             }
 
@@ -602,7 +672,6 @@
             renderComanda();
         }
 
-        // Manda únicamente los tacos y platillos pendientes a cocina (sin re-imprimir los viejos)
         async function mandarComanda() {
             const cuenta = obtenerMesaActual();
             const nuevos = cuenta.filter(i => !i.impreso);
@@ -631,7 +700,6 @@
                 });
 
                 if (res.ok) {
-                    // Marcamos los artículos como enviados para no reimprimirlos después
                     nuevos.forEach(i => i.impreso = true);
                     guardarEnAlmacenamiento();
                     renderComanda();
@@ -644,7 +712,6 @@
             }
         }
 
-        // Imprime el total y desglose de toda la mesa acumulada
         async function imprimirCuenta() {
             const cuenta = obtenerMesaActual();
             if (cuenta.length === 0) {
@@ -683,7 +750,6 @@
             }
         }
 
-        // Limpiar la mesa una vez que el cliente pagó y se fue
         function cerrarMesa() {
             if (confirm(`¿Deseas liquidar y vaciar la cuenta de ${mesaActual}?`)) {
                 cuentasMesas[mesaActual] = [];
@@ -692,7 +758,6 @@
             }
         }
 
-        // Inicialización
         filtrarCategoria('tacos');
         renderComanda();
     </script>
