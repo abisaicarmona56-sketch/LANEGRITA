@@ -416,11 +416,11 @@
     </div>
 
     <div class="categorias-bar">
-        <button class="btn-tab active" onclick="filtrarCategoria('tacos')">Tacos y Carnitas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('tortas')">Tortas y Antojitos</button>
-        <button class="btn-tab" onclick="filtrarCategoria('quesadillas')">Quesadillas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('bebidas')">Bebidas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('postres')">Postres</button>
+        <button class="btn-tab active" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('tortas', event)">Tortas y Antojitos</button>
+        <button class="btn-tab" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
+        <button class="btn-tab" onclick="filtrarCategoria('postres', event)">Postres</button>
     </div>
 
     <div class="menu-grid" id="menuGrid"></div>
@@ -451,10 +451,10 @@
             <div id="seccionPeso" style="display: none;">
                 <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; color: var(--c4);">Cantidad de Carnitas:</p>
                 <div class="peso-grid">
-                    <button type="button" class="btn-peso" onclick="setPeso(0.25, '1/4 Kg', 112.5)">1/4 Kg ($112.50)</button>
-                    <button type="button" class="btn-peso active" onclick="setPeso(0.5, '1/2 Kg', 225)">1/2 Kg ($225.00)</button>
-                    <button type="button" class="btn-peso" onclick="setPeso(0.75, '3/4 Kg', 337.5)">3/4 Kg ($337.50)</button>
-                    <button type="button" class="btn-peso" onclick="setPeso(1.0, '1 Kg', 450)">1 Kg ($450.00)</button>
+                    <button type="button" class="btn-peso" onclick="setPeso(0.25, '1/4 Kg', 112.5, event)">1/4 Kg ($112.50)</button>
+                    <button type="button" class="btn-peso active" onclick="setPeso(0.5, '1/2 Kg', 225, event)">1/2 Kg ($225.00)</button>
+                    <button type="button" class="btn-peso" onclick="setPeso(0.75, '3/4 Kg', 337.5, event)">3/4 Kg ($337.50)</button>
+                    <button type="button" class="btn-peso" onclick="setPeso(1.0, '1 Kg', 450, event)">1 Kg ($450.00)</button>
                 </div>
             </div>
             
@@ -501,9 +501,9 @@
 
     <script>
         // Servidor Python que corre en la laptop host
-        const SERVIDOR_IMPRESION = "http://192.168.100.49:8080/imprimir";
+        const SERVIDOR_IMPRESION = "http://192.168.1.49:8080/imprimir";
 
-        // Pega aquí la URL que te entregó Google Apps Script
+        // URL de Google Apps Script
         const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyDSPKZSihLIcVkVLiUb3KTtQFxjFKIcYtnS4lvW12_-fy-LJL9LHqn1P5MidFG5rRL7g/exec";
 
         const TIPOS_CARNE = [
@@ -580,9 +580,17 @@
             return cuentasMesas[mesaActual];
         }
 
-        function filtrarCategoria(categoria) {
+        // Solución al TypeError: Cannot read properties of undefined (reading 'target')
+        function filtrarCategoria(categoria, e = null) {
             document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            
+            if (e && e.target) {
+                e.target.classList.add('active');
+            } else {
+                const btnTabs = Array.from(document.querySelectorAll('.btn-tab'));
+                const btnEncontrado = btnTabs.find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(`'${categoria}'`));
+                if (btnEncontrado) btnEncontrado.classList.add('active');
+            }
 
             const container = document.getElementById("menuGrid");
             const prods = PRODUCTOS.filter(p => p.cat === categoria);
@@ -643,10 +651,15 @@
             productoSeleccionado = null;
         }
 
-        function setPeso(kilos, etiqueta, precio) {
+        function setPeso(kilos, etiqueta, precio, e = null) {
             pesoSeleccionado = { texto: etiqueta, precio: precio };
             document.querySelectorAll('.btn-peso').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            if (e && e.target) {
+                e.target.classList.add('active');
+            } else {
+                const b = Array.from(document.querySelectorAll('.btn-peso')).find(el => el.textContent.includes(etiqueta));
+                if (b) b.classList.add('active');
+            }
         }
 
         function setVerdura(tipo) {
@@ -797,7 +810,7 @@
                     alert("Error en el servidor de impresión.");
                 }
             } catch (err) {
-                alert("Error de conexión: verifica que el servidor de impresión esté encendido.");
+                alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
             }
         }
 
@@ -844,7 +857,7 @@
                 body: JSON.stringify(payloadImpresion)
             }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
 
-            // 2. Guardar cada producto individualmente en Google Sheets
+            // 2. Guardar en Google Sheets
             if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
                 const payloadSheets = {
                     numeroOrden: ordenFolio,
@@ -890,6 +903,7 @@
             }
         }
 
+        // Arranque inicial sin error de consola
         filtrarCategoria('tacos');
         renderComanda();
     </script>
