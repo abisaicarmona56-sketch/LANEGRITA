@@ -504,7 +504,7 @@
         const SERVIDOR_IMPRESION = "http://192.168.1.97:8080/imprimir";
 
         // Pega aquí la URL que te entregó Google Apps Script
-        const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbw5BXCHw9KdsKSRg-qvr-29SFhanIt4DicwBl_OAaPYLoak5NnosBDtAUCYPvmXH8MVZA/exec";
+        const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbxOcxCrSCk9Sdcg-qm-29SfHaHe9e7Z13/exec";
 
         const TIPOS_CARNE = [
             "Maciza", "Costilla", "Buche", "Surtido", 
@@ -567,6 +567,7 @@
         let productoSeleccionado = null;
         let opcionVerduraSeleccionada = "Con Todo";
         let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
+        let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
 
         function guardarEnAlmacenamiento() {
             localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
@@ -800,7 +801,6 @@
             }
         }
 
-        // Modal de Cobro y Google Sheets
         function abrirModalCobro() {
             const cuenta = obtenerMesaActual();
             if (cuenta.length === 0) {
@@ -818,12 +818,16 @@
 
         async function procesarPago(metodoPago) {
             const cuenta = obtenerMesaActual();
+            if (cuenta.length === 0) return;
+
             const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
             const fechaHora = new Date().toLocaleString('es-MX');
+            const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
 
-            // 1. Imprimir ticket final con método de pago
+            // 1. Imprimir ticket de cuenta final
             const payloadImpresion = {
                 tipo: "CUENTA",
+                numeroOrden: ordenFolio,
                 ubicacion: `${mesaActual} (${metodoPago})`,
                 fecha: fechaHora,
                 orden: cuenta.map(i => ({
@@ -840,29 +844,38 @@
                 body: JSON.stringify(payloadImpresion)
             }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
 
-            // 2. Guardar venta en Google Sheets
-            if (URL_GOOGLE_SHEETS && URL_GOOGLE_SHEETS !== "TU_URL_DE_APPS_SCRIPT_AQUI") {
-                const detallePlatillos = cuenta.map(i => `${i.cant}x ${i.nombre} ${i.notas ? '(' + i.notas + ')' : ''}`).join(' | ');
+            // 2. Guardar cada producto individualmente en Google Sheets
+            if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
+                const payloadSheets = {
+                    numeroOrden: ordenFolio,
+                    fecha: fechaHora,
+                    mesa: mesaActual,
+                    metodoPago: metodoPago,
+                    productos: cuenta.map(i => ({
+                        nombre: i.nombre,
+                        notas: i.notas || "",
+                        cantidad: i.cant,
+                        precioUnitario: i.precio,
+                        subtotal: i.cant * i.precio
+                    }))
+                };
 
                 fetch(URL_GOOGLE_SHEETS, {
                     method: "POST",
                     mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        fecha: fechaHora,
-                        mesa: mesaActual,
-                        metodoPago: metodoPago,
-                        total: total,
-                        detalle: detallePlatillos
-                    })
+                    body: JSON.stringify(payloadSheets)
                 }).then(() => {
-                    console.log("Guardado en Google Sheets con éxito.");
+                    console.log("Venta guardada en Sheets correctamente.");
                 }).catch(err => {
                     console.error("Error al guardar en Sheets:", err);
                 });
             }
 
-            alert(`¡Cobro exitoso con ${metodoPago}! Mesa liquidada.`);
+            numeroOrdenActual++;
+            localStorage.setItem('num_orden_negrita', numeroOrdenActual);
+
+            alert(`¡Cobro exitoso con ${metodoPago}! Orden ${ordenFolio} registrada.`);
             cerrarModalCobro();
             cuentasMesas[mesaActual] = [];
             guardarEnAlmacenamiento();
