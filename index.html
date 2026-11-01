@@ -306,6 +306,31 @@
             border-color: var(--c2);
         }
 
+        /* Mini menú de refrescos */
+        .refrescos-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .btn-refresco {
+            padding: 14px 8px;
+            border-radius: 8px;
+            border: 1px solid var(--c2);
+            background: #f0f7f5;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--c3);
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn-refresco:active {
+            background: var(--c1);
+            color: white;
+        }
+
         .carnes-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -392,13 +417,55 @@
             background: var(--c1);
             color: white;
         }
+
+        .metodos-pago { flex-wrap: wrap; }
+        .metodos-pago .btn-metodo { flex: 1 1 100px; font-size: 0.95rem; padding: 16px 6px; }
+
+        .btn-header-corte {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 8px;
+            padding: 7px 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .corte-fila {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 4px;
+            border-bottom: 1px dashed var(--border);
+            font-size: 1.05rem;
+            color: var(--c4);
+        }
+
+        .corte-fila.total {
+            border-bottom: none;
+            border-top: 2px solid var(--c2);
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: var(--c2);
+            margin-top: 4px;
+        }
+
+        .corte-aviso {
+            background: #fff6e0;
+            border: 1px solid #f0c860;
+            color: #7a5a00;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.85rem;
+            margin: 12px 0 0;
+        }
     </style>
 </head>
 <body>
 
     <header>
         <h1>🌮 Taquería La Negrita</h1>
-        <span style="font-size: 0.8rem; opacity: 0.9;">POS Móvil</span>
+        <button type="button" class="btn-header-corte" onclick="abrirModalCorte()">🧾 Corte de caja</button>
     </header>
 
     <div class="mesa-selector">
@@ -481,6 +548,17 @@
         </div>
     </div>
 
+    <!-- Modal de Refrescos (mini menú) -->
+    <div class="modal" id="modalRefresco">
+        <div class="modal-content">
+            <div class="modal-top-bar">
+                <div class="modal-header">Elige el refresco</div>
+                <button type="button" class="btn-close-modal" onclick="cerrarModalRefresco()">✖</button>
+            </div>
+            <div class="refrescos-grid" id="refrescosContainer"></div>
+        </div>
+    </div>
+
     <!-- Modal de Cobro (Efectivo / Tarjeta) -->
     <div class="modal" id="modalCobro">
         <div class="modal-content">
@@ -495,7 +573,25 @@
             <div class="metodos-pago">
                 <button class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
                 <button class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
+                <button class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Corte de Caja -->
+    <div class="modal" id="modalCorte">
+        <div class="modal-content">
+            <div class="modal-top-bar">
+                <div class="modal-header">Corte de caja</div>
+                <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
+            </div>
+            <p id="corteSubtitulo" style="font-size: 0.85rem; color: #555; margin-bottom: 8px;"></p>
+            <div class="corte-fila"><span>💵 Efectivo</span><strong id="corteEfectivo">$0.00</strong></div>
+            <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
+            <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
+            <div class="corte-fila total"><span>Total vendido</span><span id="corteTotal">$0.00</span></div>
+            <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
+            <button class="modal-btn-confirm" style="margin-top: 16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
         </div>
     </div>
 
@@ -504,7 +600,7 @@
         const SERVIDOR_IMPRESION = "http://192.168.100.49:8080/imprimir";
 
         // URL de Google Apps Script
-        const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycby0dvJEln4wPWwz-kuYnl8Soez8NrR8gtmV1Vbb4OG14UdECKr-PDtak1im0_sJpc6Qbw/exec";
+        const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyY9JosIawPskVEiVHqntFNgvmhHg4mX6MskdhMUja5qDJ8H02RZh4ZyFpL4ivmskld/exec";
 
         const TIPOS_CARNE = [
             "Maciza", "Costilla", "Buche", "Surtido", 
@@ -512,13 +608,24 @@
             "Oreja", "Lengua", "Chamorro"
         ];
 
+        // Opciones del mini menú de refrescos
+        const SABORES_REFRESCO = [
+            "Coca", "Coca sin azúcar", "Sidral Mundet rojo", "Agua mineral",
+            "Sangría", "Jarritos", "Del Valle de mango"
+        ];
+
         const PRODUCTOS = [
             // Tacos y Carnitas
-            { id: 101, cat: 'tacos', nombre: 'Taco de Carnitas', precio: 20, esComida: true, llevaCarne: true },
             { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, esComida: true, llevaCarne: false },
             { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, esComida: true, llevaCarne: false },
             { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, esComida: true, llevaCarne: false },
             { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, esComida: true, llevaCarne: false },
+            { id: 111, cat: 'tacos', nombre: 'Taco de Buche', precio: 20, esComida: true, llevaCarne: false },
+            { id: 112, cat: 'tacos', nombre: 'Taco de Maciza', precio: 20, esComida: true, llevaCarne: false },
+            { id: 113, cat: 'tacos', nombre: 'Taco de Barriga', precio: 20, esComida: true, llevaCarne: false },
+            { id: 114, cat: 'tacos', nombre: 'Taco de Hígado', precio: 20, esComida: true, llevaCarne: false },
+            { id: 115, cat: 'tacos', nombre: 'Taco de Chamorro', precio: 20, esComida: true, llevaCarne: false },
+            { id: 116, cat: 'tacos', nombre: 'Taco Surtido', precio: 20, esComida: true, llevaCarne: false },
             { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, esComida: true, llevaCarne: false },
             { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, esComida: true, llevaCarne: true },
             { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla revuelta)', precio: 20, esComida: true, llevaCarne: true },
@@ -530,6 +637,8 @@
             { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, esComida: true, llevaCarne: false },
             { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, esComida: true, llevaCarne: false },
             { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, esComida: true, llevaCarne: true },
+            { id: 216, cat: 'tortas', nombre: 'Gordita con Queso', precio: 45, esComida: true, llevaCarne: false },
+            { id: 217, cat: 'tortas', nombre: 'Gordita con Carne y Queso', precio: 55, esComida: true, llevaCarne: true },
             { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, esComida: true, llevaCarne: false },
             { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, esComida: true, llevaCarne: true },
             { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false },
@@ -549,7 +658,7 @@
             { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, esComida: true, llevaCarne: true },
 
             // Bebidas
-            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, esComida: false, llevaCarne: false },
+            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, esComida: false, llevaCarne: false, esRefresco: true },
             { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, esComida: false, llevaCarne: false },
             { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, esComida: false, llevaCarne: false },
             { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, esComida: false, llevaCarne: false },
@@ -558,6 +667,7 @@
 
             // Postres
             { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
+            { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
             { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
             { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
         ];
@@ -565,9 +675,90 @@
         let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
         let mesaActual = "Mesa 1";
         let productoSeleccionado = null;
+        let productoRefresco = null;
         let opcionVerduraSeleccionada = "Con Todo";
         let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
         let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
+        // Ventas cobradas desde el último corte de caja
+        let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
+
+        function guardarVentasTurno() {
+            localStorage.setItem('ventas_turno_negrita', JSON.stringify(ventasTurno));
+        }
+
+        function dinero(n) {
+            return '$' + Number(n).toFixed(2);
+        }
+
+        function resumenTurno() {
+            const r = { Efectivo: 0, Tarjeta: 0, Transferencia: 0, total: 0, ordenes: ventasTurno.length };
+            ventasTurno.forEach(v => {
+                if (r[v.metodo] !== undefined) r[v.metodo] += v.total;
+                r.total += v.total;
+            });
+            return r;
+        }
+
+        function abrirModalCorte() {
+            const r = resumenTurno();
+            document.getElementById("corteEfectivo").innerText = dinero(r.Efectivo);
+            document.getElementById("corteTarjeta").innerText = dinero(r.Tarjeta);
+            document.getElementById("corteTransferencia").innerText = dinero(r.Transferencia);
+            document.getElementById("corteTotal").innerText = dinero(r.total);
+            document.getElementById("corteSubtitulo").innerText = r.ordenes === 0
+                ? "Aún no hay ventas desde el último corte."
+                : `${r.ordenes} orden(es) desde ${ventasTurno[0].fecha}`;
+
+            const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m].length > 0);
+            const aviso = document.getElementById("corteAviso");
+            if (abiertas.length > 0) {
+                aviso.style.display = "block";
+                aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en el corte.";
+            } else {
+                aviso.style.display = "none";
+            }
+            document.getElementById("modalCorte").style.display = "flex";
+        }
+
+        function cerrarModalCorte() {
+            document.getElementById("modalCorte").style.display = "none";
+        }
+
+        function confirmarCorte() {
+            if (ventasTurno.length === 0) {
+                alert("No hay ventas que cortar.");
+                return;
+            }
+            if (!confirm("¿Hacer el corte de caja? Los contadores volverán a $0.00.")) return;
+
+            const r = resumenTurno();
+            const payload = {
+                tipo: "CORTE",
+                fecha: new Date().toLocaleString('es-MX'),
+                ordenes: r.ordenes,
+                primerFolio: ventasTurno[0].folio,
+                ultimoFolio: ventasTurno[ventasTurno.length - 1].folio,
+                efectivo: r.Efectivo,
+                tarjeta: r.Tarjeta,
+                transferencia: r.Transferencia,
+                total: r.total
+            };
+
+            fetch(URL_GOOGLE_SHEETS, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                ventasTurno = [];
+                guardarVentasTurno();
+                cerrarModalCorte();
+                alert(`Corte guardado.\nEfectivo: ${dinero(r.Efectivo)}\nTarjeta: ${dinero(r.Tarjeta)}\nTransferencia: ${dinero(r.Transferencia)}\nTotal: ${dinero(r.total)}`);
+            }).catch(err => {
+                console.error("Error al guardar corte:", err);
+                alert("No se pudo guardar el corte (sin conexión). Inténtalo de nuevo; tus ventas siguen guardadas.");
+            });
+        }
 
         function guardarEnAlmacenamiento() {
             localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
@@ -580,7 +771,6 @@
             return cuentasMesas[mesaActual];
         }
 
-        // Solución al TypeError: Cannot read properties of undefined (reading 'target')
         function filtrarCategoria(categoria, e = null) {
             document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
             
@@ -607,12 +797,35 @@
             const prod = PRODUCTOS.find(p => p.id === id);
             if (!prod) return;
 
-            if (prod.esComida) {
+            if (prod.esRefresco) {
+                abrirModalRefresco(prod);
+            } else if (prod.esComida) {
                 productoSeleccionado = prod;
                 abrirModalOpciones(prod);
             } else {
                 agregarDirecto(prod.nombre, prod.precio, "");
             }
+        }
+
+        // ---- Mini menú de refrescos ----
+        function abrirModalRefresco(prod) {
+            productoRefresco = prod;
+            document.getElementById("refrescosContainer").innerHTML = SABORES_REFRESCO.map((s, i) => `
+                <button type="button" class="btn-refresco" onclick="elegirRefresco(${i})">${s}</button>
+            `).join('');
+            document.getElementById("modalRefresco").style.display = "flex";
+        }
+
+        function cerrarModalRefresco() {
+            document.getElementById("modalRefresco").style.display = "none";
+            productoRefresco = null;
+        }
+
+        function elegirRefresco(indice) {
+            if (!productoRefresco) return;
+            const sabor = SABORES_REFRESCO[indice];
+            agregarDirecto(`Refresco: ${sabor}`, productoRefresco.precio, "");
+            cerrarModalRefresco();
         }
 
         function abrirModalOpciones(prod) {
@@ -860,6 +1073,7 @@
             // 2. Guardar en Google Sheets
             if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
                 const payloadSheets = {
+                    tipo: "VENTA",
                     numeroOrden: ordenFolio,
                     fecha: fechaHora,
                     mesa: mesaActual,
@@ -885,6 +1099,9 @@
                 });
             }
 
+            ventasTurno.push({ folio: ordenFolio, fecha: fechaHora, metodo: metodoPago, total: total });
+            guardarVentasTurno();
+
             numeroOrdenActual++;
             localStorage.setItem('num_orden_negrita', numeroOrdenActual);
 
@@ -903,7 +1120,7 @@
             }
         }
 
-        // Arranque inicial sin error de consola
+        // Arranque inicial
         filtrarCategoria('tacos');
         renderComanda();
     </script>
