@@ -7,11 +7,18 @@
 <style>
 :root{--c1:#0B8770;--c2:#086954;--c3:#064B38;--c4:#032C1C;--c5:#000E00;--bg:#f2f5f4;--border:#d2deda}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--c5);padding-bottom:240px}
+body{background:var(--bg);color:var(--c5);padding-bottom:300px}
 header{background:linear-gradient(135deg,var(--c3),var(--c4));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,14,0,.3)}
 header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 .mesa-selector{background:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
 .mesa-selector select{flex:1;padding:10px;border-radius:8px;border:1px solid var(--c2);font-size:1rem;font-weight:600;background:#fff;color:var(--c4)}
+.personas-bar{display:flex;overflow-x:auto;background:#fff;padding:8px 12px;gap:8px;white-space:nowrap;scrollbar-width:none;border-bottom:1px solid var(--border);align-items:center}
+.personas-bar::-webkit-scrollbar{display:none}
+.btn-persona{padding:8px 14px;border-radius:8px;border:2px solid var(--c3);background:#fff;color:var(--c3);font-size:.9rem;font-weight:700;cursor:pointer}
+.btn-persona.active{background:var(--c3);color:#fff}
+.btn-persona .badge{display:inline-block;background:var(--c1);color:#fff;border-radius:10px;padding:1px 7px;font-size:.75rem;margin-left:5px}
+.btn-persona-add{padding:8px 14px;border-radius:8px;border:2px dashed var(--c1);background:#f0f7f5;color:var(--c2);font-size:.9rem;font-weight:700;cursor:pointer}
+.btn-persona-del{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#f3f3f3;color:#777;font-size:.85rem;font-weight:700;cursor:pointer}
 .categorias-bar{display:flex;overflow-x:auto;background:#e1ebe7;padding:8px 12px;gap:8px;white-space:nowrap;scrollbar-width:none}
 .categorias-bar::-webkit-scrollbar{display:none}
 .btn-tab{padding:8px 14px;border-radius:20px;border:1px solid var(--c2);background:#fff;color:var(--c3);font-size:.88rem;font-weight:600;cursor:pointer}
@@ -23,7 +30,9 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 .prod-precio{font-weight:700;color:var(--c2);font-size:1rem}
 .comanda-panel{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--c2);padding:12px 16px;z-index:150;box-shadow:0 -4px 15px rgba(0,14,0,.12)}
 .totales-row{display:flex;justify-content:space-between;font-weight:bold;font-size:1.05rem;margin-bottom:8px;color:var(--c4)}
-.lista-articulos{max-height:110px;overflow-y:auto;border-bottom:1px solid var(--border);margin-bottom:10px;padding-bottom:5px}
+.lista-articulos{max-height:170px;overflow-y:auto;border-bottom:1px solid var(--border);margin-bottom:10px;padding-bottom:5px}
+.persona-grupo-header{display:flex;justify-content:space-between;align-items:center;background:#e1ebe7;color:var(--c3);font-weight:800;font-size:.85rem;padding:5px 8px;border-radius:6px;margin-top:6px}
+.persona-grupo-header.activa{background:var(--c3);color:#fff}
 .item-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #e0ece8;font-size:.9rem}
 .item-row.impreso{color:#7b948d}
 .btn-qty{width:26px;height:26px;border-radius:50%;border:1px solid var(--c2);background:#f0f7f5;color:var(--c3);font-size:1rem;font-weight:bold}
@@ -73,10 +82,18 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
         <option value="Mesa 4">Mesa 4</option>
         <option value="Mesa 5">Mesa 5</option>
         <option value="Mesa 6">Mesa 6</option>
+        <option value="Mesa 7">Mesa 7</option>
+        <option value="De pie 1">De pie 1</option>
+        <option value="De pie 2">De pie 2</option>
+        <option value="De pie 3">De pie 3</option>
+        <option value="De pie 4">De pie 4</option>
+        <option value="De pie 5">De pie 5</option>
         <option value="Barra">Barra</option>
         <option value="Para Llevar">Para Llevar</option>
     </select>
 </div>
+
+<div class="personas-bar" id="personasBar"></div>
 
 <div class="categorias-bar">
     <button class="btn-tab active" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
@@ -124,12 +141,11 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
         <div id="seccionVerdura">
             <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Verdura / Preparación:</p>
             <div class="opciones-verdura">
-                <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
-                <button type="button" class="btn-verdura" id="vSoloCeb" onclick="setVerdura('Solo con cebolla')">Solo cebolla</button>
-                <button type="button" class="btn-verdura" id="vSoloCil" onclick="setVerdura('Solo con cilantro')">Solo cilantro</button>
+                <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con todo')">Con todo</button>
                 <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
                 <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
-                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Sin verdura</button>
+                <button type="button" class="btn-verdura" id="vSoloVerd" onclick="setVerdura('Solo verdura')">Solo verdura</button>
+                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo')">Solo</button>
             </div>
         </div>
         <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:.9rem;">
@@ -219,6 +235,7 @@ const PRODUCTOS = [
     { id: 114, cat: 'tacos', nombre: 'Taco de Hígado', precio: 20, esComida: true, llevaCarne: false },
     { id: 115, cat: 'tacos', nombre: 'Taco de Chamorro', precio: 20, esComida: true, llevaCarne: false },
     { id: 116, cat: 'tacos', nombre: 'Taco Surtido', precio: 20, esComida: true, llevaCarne: false },
+    { id: 117, cat: 'tacos', nombre: 'Taco Combinado', precio: 20, esComida: true, llevaCarne: true },
     { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, esComida: true, llevaCarne: false },
     { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, esComida: true, llevaCarne: true },
     { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla revuelta)', precio: 20, esComida: true, llevaCarne: true },
@@ -262,10 +279,11 @@ const PRODUCTOS = [
 ];
 
 let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
+let personasMesas = JSON.parse(localStorage.getItem('personas_negrita') || '{}');
 let mesaActual = "Mesa 1";
 let productoSeleccionado = null;
 let productoRefresco = null;
-let opcionVerduraSeleccionada = "Con Todo";
+let opcionVerduraSeleccionada = "Con todo";
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
 let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
@@ -276,6 +294,93 @@ function guardarVentasTurno() {
 
 function dinero(n) {
     return '$' + Number(n).toFixed(2);
+}
+
+// ---- Personas ----
+function guardarPersonas() {
+    localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+}
+
+function personaDeItem(item) {
+    return item.persona || 1;
+}
+
+function infoPersonas() {
+    if (!personasMesas[mesaActual]) personasMesas[mesaActual] = { total: 1, actual: 1 };
+    const info = personasMesas[mesaActual];
+    // Asegura que el total cubra a todas las personas que ya tienen artículos
+    const cuenta = cuentasMesas[mesaActual] || [];
+    const maxItem = cuenta.reduce((m, i) => Math.max(m, personaDeItem(i)), 1);
+    if (info.total < maxItem) info.total = maxItem;
+    if (info.actual > info.total) info.actual = info.total;
+    if (info.actual < 1) info.actual = 1;
+    return info;
+}
+
+function renderPersonas() {
+    const info = infoPersonas();
+    const cuenta = obtenerMesaActual();
+    let html = '';
+    for (let n = 1; n <= info.total; n++) {
+        const cant = cuenta.filter(i => personaDeItem(i) === n).reduce((a, i) => a + i.cant, 0);
+        html += `<button type="button" class="btn-persona ${n === info.actual ? 'active' : ''}" onclick="seleccionarPersona(${n})">👤 Persona ${n}${cant > 0 ? `<span class="badge">${cant}</span>` : ''}</button>`;
+    }
+    html += `<button type="button" class="btn-persona-add" onclick="agregarPersona()">+ Persona</button>`;
+    if (info.total > 1) html += `<button type="button" class="btn-persona-del" onclick="quitarPersona()">− Quitar última</button>`;
+    document.getElementById("personasBar").innerHTML = html;
+}
+
+function seleccionarPersona(n) {
+    infoPersonas().actual = n;
+    guardarPersonas();
+    renderPersonas();
+    renderComanda();
+}
+
+function agregarPersona() {
+    const info = infoPersonas();
+    info.total += 1;
+    info.actual = info.total;
+    guardarPersonas();
+    renderPersonas();
+    renderComanda();
+}
+
+function quitarPersona() {
+    const info = infoPersonas();
+    if (info.total <= 1) return;
+    const tieneArticulos = obtenerMesaActual().some(i => personaDeItem(i) === info.total);
+    if (tieneArticulos) {
+        alert(`La Persona ${info.total} ya tiene artículos. Quítalos primero con el botón "-".`);
+        return;
+    }
+    info.total -= 1;
+    if (info.actual > info.total) info.actual = info.total;
+    guardarPersonas();
+    renderPersonas();
+    renderComanda();
+}
+
+function reiniciarPersonas(mesa) {
+    personasMesas[mesa] = { total: 1, actual: 1 };
+    guardarPersonas();
+}
+
+// Agrupa artículos por persona -> [{persona, items}]
+function agruparPorPersona(items) {
+    const nums = [...new Set(items.map(personaDeItem))].sort((a, b) => a - b);
+    return nums.map(n => ({ persona: n, items: items.filter(i => personaDeItem(i) === n) }));
+}
+
+// Arma la lista para imprimir con encabezado por persona
+function armarOrdenImpresion(items, formatoNombre, conSubtotal) {
+    const out = [];
+    agruparPorPersona(items).forEach(g => {
+        const sub = g.items.reduce((a, i) => a + i.cant * i.precio, 0);
+        out.push({ cant: "", nombre: `== PERSONA ${g.persona}${conSubtotal ? ' (' + dinero(sub) + ')' : ''} ==`, notas: "" });
+        g.items.forEach(i => out.push({ cant: i.cant, nombre: formatoNombre(i), notas: i.notas }));
+    });
+    return out;
 }
 
 // ---- Corte de caja ----
@@ -435,7 +540,7 @@ function elegirRefresco(indice) {
 
 // ---- Opciones de comida ----
 function abrirModalOpciones(prod) {
-    document.getElementById("modalTitulo").innerText = prod.nombre;
+    document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${infoPersonas().actual}`;
     const secPeso = document.getElementById("seccionPeso");
     if (prod.esPorKilo) {
         secPeso.style.display = "block";
@@ -456,7 +561,7 @@ function abrirModalOpciones(prod) {
         secCarnes.style.display = "none";
         container.innerHTML = "";
     }
-    setVerdura('Con Todo');
+    setVerdura('Con todo');
     document.getElementById("notaExtra").value = "";
     document.getElementById("modalOpciones").style.display = "flex";
 }
@@ -480,8 +585,17 @@ function setPeso(kilos, etiqueta, precio, e = null) {
 function setVerdura(tipo) {
     opcionVerduraSeleccionada = tipo;
     document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
-    const ids = { 'Con Todo': 'vTodo', 'Solo con cebolla': 'vSoloCeb', 'Solo con cilantro': 'vSoloCil', 'Sin cebolla': 'vSinCeb', 'Sin cilantro': 'vSinCil', 'Solo carne': 'vSolo' };
-    if (ids[tipo]) document.getElementById(ids[tipo]).classList.add('active');
+    const ids = {
+        'Con todo': 'vTodo',
+        'Sin cebolla': 'vSinCeb',
+        'Sin cilantro': 'vSinCil',
+        'Solo verdura': 'vSoloVerd',
+        'Solo': 'vSolo'
+    };
+    if (ids[tipo]) {
+        const el = document.getElementById(ids[tipo]);
+        if (el) el.classList.add('active');
+    }
 }
 
 function confirmarAgregarConOpciones() {
@@ -511,11 +625,12 @@ function confirmarAgregarConOpciones() {
 
 function agregarDirecto(nombre, precio, notas) {
     const cuenta = obtenerMesaActual();
-    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso);
+    const persona = infoPersonas().actual;
+    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso && personaDeItem(item) === persona);
     if (existente) {
         existente.cant += 1;
     } else {
-        cuenta.push({ idTemp: Date.now() + Math.random(), nombre, precio, cant: 1, notas, impreso: false });
+        cuenta.push({ idTemp: Date.now() + Math.random(), nombre, precio, cant: 1, notas, impreso: false, persona });
     }
     guardarEnAlmacenamiento();
     renderComanda();
@@ -534,19 +649,23 @@ function cambiarCantidad(idTemp, delta) {
 
 function renderComanda() {
     const cuenta = obtenerMesaActual();
+    const info = infoPersonas();
     const lista = document.getElementById("listaArticulos");
     const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
     const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
     document.getElementById("cantPendiente").innerText = `${pendientes} nuevos por comanda`;
     document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
+    renderPersonas();
 
     if (cuenta.length === 0) {
-        lista.innerHTML = `<div style="text-align:center;color:#789088;font-size:.85rem;padding:10px;">Selecciona productos para armar comanda</div>`;
+        lista.innerHTML = `<div style="text-align:center;color:#789088;font-size:.85rem;padding:10px;">Persona ${info.actual}: selecciona productos para armar la comanda</div>`;
         return;
     }
 
-    lista.innerHTML = cuenta.map(item => `
+    lista.innerHTML = agruparPorPersona(cuenta).map(g => {
+        const sub = g.items.reduce((a, i) => a + i.cant * i.precio, 0);
+        const filas = g.items.map(item => `
         <div class="item-row ${item.impreso ? 'impreso' : ''}">
             <div style="flex:1;">
                 <strong>${item.nombre}</strong> ${item.impreso ? '✓' : ''}
@@ -559,6 +678,10 @@ function renderComanda() {
                 <span style="font-weight:bold;min-width:45px;text-align:right;">$${item.cant * item.precio}</span>
             </div>
         </div>`).join('');
+        return `<div class="persona-grupo-header ${g.persona === info.actual ? 'activa' : ''}">
+                    <span>👤 Persona ${g.persona}</span><span>${dinero(sub)}</span>
+                </div>${filas}`;
+    }).join('');
 }
 
 function cambiarMesa() {
@@ -577,7 +700,11 @@ async function mandarComanda() {
         tipo: "COMANDA",
         ubicacion: mesaActual,
         fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        orden: nuevos.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas }))
+        orden: armarOrdenImpresion(nuevos, i => i.nombre, false),
+        personas: agruparPorPersona(nuevos).map(g => ({
+            persona: g.persona,
+            orden: g.items.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas }))
+        }))
     };
     try {
         const res = await fetch(SERVIDOR_IMPRESION, {
@@ -622,7 +749,7 @@ async function procesarPago(metodoPago) {
     const fechaHora = new Date().toLocaleString('es-MX');
     const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
 
-    // 1. Ticket de cuenta final
+    // 1. Ticket de cuenta final (separado por persona)
     fetch(SERVIDOR_IMPRESION, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -631,7 +758,12 @@ async function procesarPago(metodoPago) {
             numeroOrden: ordenFolio,
             ubicacion: `${mesaActual} (${metodoPago})`,
             fecha: fechaHora,
-            orden: cuenta.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas })),
+            orden: armarOrdenImpresion(cuenta, i => `${i.nombre} ($${i.precio})`, true),
+            personas: agruparPorPersona(cuenta).map(g => ({
+                persona: g.persona,
+                subtotal: g.items.reduce((a, i) => a + i.cant * i.precio, 0),
+                orden: g.items.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas }))
+            })),
             total: total
         })
     }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
@@ -650,6 +782,7 @@ async function procesarPago(metodoPago) {
                 metodoPago: metodoPago,
                 total: total,
                 productos: cuenta.map(i => ({
+                    persona: `Persona ${personaDeItem(i)}`,
                     nombre: i.nombre,
                     notas: i.notas || "",
                     cantidad: i.cant,
@@ -672,6 +805,7 @@ async function procesarPago(metodoPago) {
     cerrarModalCobro();
     cuentasMesas[mesaActual] = [];
     guardarEnAlmacenamiento();
+    reiniciarPersonas(mesaActual);
     renderComanda();
 }
 
@@ -679,6 +813,7 @@ function cerrarMesa() {
     if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
         cuentasMesas[mesaActual] = [];
         guardarEnAlmacenamiento();
+        reiniciarPersonas(mesaActual);
         renderComanda();
     }
 }
