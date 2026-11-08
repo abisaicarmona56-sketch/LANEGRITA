@@ -1,1128 +1,691 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>POS Taquería La Negrita</title>
-    <style>
-        :root {
-            --c1: #0B8770;
-            --c2: #086954;
-            --c3: #064B38;
-            --c4: #032C1C;
-            --c5: #000E00;
-            --bg: #f2f5f4;
-            --white: #ffffff;
-            --border: #d2deda;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            background: var(--bg);
-            color: var(--c5);
-            padding-bottom: 240px;
-        }
-
-        header {
-            background: linear-gradient(135deg, var(--c3), var(--c4));
-            color: white;
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 8px rgba(0, 14, 0, 0.3);
-        }
-
-        header h1 {
-            font-size: 1.15rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-
-        .mesa-selector {
-            background: #fff;
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .mesa-selector select {
-            flex: 1;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--c2);
-            font-size: 1rem;
-            font-weight: 600;
-            background: #fff;
-            color: var(--c4);
-        }
-
-        /* Categorías */
-        .categorias-bar {
-            display: flex;
-            overflow-x: auto;
-            background: #e1ebe7;
-            padding: 8px 12px;
-            gap: 8px;
-            white-space: nowrap;
-            scrollbar-width: none;
-        }
-        .categorias-bar::-webkit-scrollbar { display: none; }
-
-        .btn-tab {
-            padding: 8px 14px;
-            border-radius: 20px;
-            border: 1px solid var(--c2);
-            background: white;
-            color: var(--c3);
-            font-size: 0.88rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .btn-tab.active {
-            background: var(--c2);
-            color: white;
-            border-color: var(--c2);
-        }
-
-        /* Grilla de Menú */
-        .menu-grid {
-            padding: 12px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-            gap: 10px;
-        }
-
-        .card-prod {
-            background: white;
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-height: 95px;
-            box-shadow: 0 2px 4px rgba(3, 44, 28, 0.05);
-            cursor: pointer;
-            border-left: 4px solid var(--c1);
-        }
-
-        .card-prod:active {
-            background: #e8f4f1;
-            transform: scale(0.98);
-        }
-
-        .prod-nombre {
-            font-weight: bold;
-            font-size: 0.95rem;
-            margin-bottom: 4px;
-            color: var(--c4);
-        }
-
-        .prod-precio {
-            font-weight: 700;
-            color: var(--c2);
-            font-size: 1rem;
-        }
-
-        /* Panel Comanda Inferior */
-        .comanda-panel {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            border-top: 2px solid var(--c2);
-            padding: 12px 16px;
-            z-index: 150;
-            box-shadow: 0 -4px 15px rgba(0, 14, 0, 0.12);
-        }
-
-        .totales-row {
-            display: flex;
-            justify-content: space-between;
-            font-weight: bold;
-            font-size: 1.05rem;
-            margin-bottom: 8px;
-            color: var(--c4);
-        }
-
-        .lista-articulos {
-            max-height: 110px;
-            overflow-y: auto;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-        }
-
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 0;
-            border-bottom: 1px dashed #e0ece8;
-            font-size: 0.9rem;
-        }
-
-        .item-row.impreso {
-            color: #7b948d;
-        }
-
-        .btn-qty {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            border: 1px solid var(--c2);
-            background: #f0f7f5;
-            color: var(--c3);
-            font-size: 1rem;
-            font-weight: bold;
-        }
-
-        .acciones-bar {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-comanda {
-            flex: 2;
-            background: var(--c1);
-            color: white;
-            border: none;
-            padding: 13px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-
-        .btn-cuenta {
-            flex: 1.3;
-            background: var(--c3);
-            color: white;
-            border: none;
-            padding: 13px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 0.95rem;
-            cursor: pointer;
-        }
-
-        .btn-limpiar {
-            background: #e3ebe8;
-            color: var(--c4);
-            border: none;
-            padding: 13px 10px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        /* Modales */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 14, 0, 0.6);
-            z-index: 300;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-        }
-
-        .modal-content {
-            background: white;
-            width: 100%;
-            max-width: 440px;
-            border-radius: 14px;
-            padding: 18px;
-            max-height: 90vh;
-            overflow-y: auto;
-            position: relative;
-        }
-
-        .modal-top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .modal-header {
-            font-weight: bold;
-            font-size: 1.15rem;
-            color: var(--c4);
-        }
-
-        .btn-close-modal {
-            background: #eceff1;
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #555;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .peso-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 14px;
-        }
-
-        .btn-peso {
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: #f8faf9;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .btn-peso.active {
-            background: var(--c2);
-            color: white;
-            border-color: var(--c2);
-        }
-
-        /* Mini menú de refrescos */
-        .refrescos-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 6px;
-        }
-
-        .btn-refresco {
-            padding: 14px 8px;
-            border-radius: 8px;
-            border: 1px solid var(--c2);
-            background: #f0f7f5;
-            font-size: 0.92rem;
-            font-weight: 600;
-            color: var(--c3);
-            cursor: pointer;
-            text-align: center;
-        }
-
-        .btn-refresco:active {
-            background: var(--c1);
-            color: white;
-        }
-
-        .carnes-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 14px;
-        }
-
-        .check-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: #f2f7f5;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            border: 1px solid var(--border);
-            color: var(--c4);
-        }
-
-        .check-btn input {
-            accent-color: var(--c1);
-            transform: scale(1.2);
-        }
-
-        .opciones-verdura {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 14px;
-        }
-
-        .btn-verdura {
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: #f8faf9;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
-            color: var(--c4);
-        }
-
-        .btn-verdura.active {
-            background: var(--c1);
-            color: white;
-            border-color: var(--c1);
-        }
-
-        .modal-btn-confirm {
-            width: 100%;
-            background: var(--c2);
-            color: white;
-            padding: 13px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        /* Modal de Cobro */
-        .metodos-pago {
-            display: flex;
-            gap: 12px;
-            margin: 20px 0;
-        }
-
-        .btn-metodo {
-            flex: 1;
-            padding: 16px;
-            border-radius: 10px;
-            border: 2px solid var(--c1);
-            background: #f0f7f5;
-            font-size: 1.05rem;
-            font-weight: bold;
-            color: var(--c3);
-            cursor: pointer;
-            text-align: center;
-        }
-
-        .btn-metodo:active {
-            background: var(--c1);
-            color: white;
-        }
-
-        .metodos-pago { flex-wrap: wrap; }
-        .metodos-pago .btn-metodo { flex: 1 1 100px; font-size: 0.95rem; padding: 16px 6px; }
-
-        .btn-header-corte {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.5);
-            border-radius: 8px;
-            padding: 7px 12px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .corte-fila {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 4px;
-            border-bottom: 1px dashed var(--border);
-            font-size: 1.05rem;
-            color: var(--c4);
-        }
-
-        .corte-fila.total {
-            border-bottom: none;
-            border-top: 2px solid var(--c2);
-            font-weight: 800;
-            font-size: 1.25rem;
-            color: var(--c2);
-            margin-top: 4px;
-        }
-
-        .corte-aviso {
-            background: #fff6e0;
-            border: 1px solid #f0c860;
-            color: #7a5a00;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 0.85rem;
-            margin: 12px 0 0;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>POS Taquería La Negrita</title>
+<style>
+:root{--c1:#0B8770;--c2:#086954;--c3:#064B38;--c4:#032C1C;--c5:#000E00;--bg:#f2f5f4;--border:#d2deda}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--c5);padding-bottom:240px}
+header{background:linear-gradient(135deg,var(--c3),var(--c4));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,14,0,.3)}
+header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
+.mesa-selector{background:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.mesa-selector select{flex:1;padding:10px;border-radius:8px;border:1px solid var(--c2);font-size:1rem;font-weight:600;background:#fff;color:var(--c4)}
+.categorias-bar{display:flex;overflow-x:auto;background:#e1ebe7;padding:8px 12px;gap:8px;white-space:nowrap;scrollbar-width:none}
+.categorias-bar::-webkit-scrollbar{display:none}
+.btn-tab{padding:8px 14px;border-radius:20px;border:1px solid var(--c2);background:#fff;color:var(--c3);font-size:.88rem;font-weight:600;cursor:pointer}
+.btn-tab.active{background:var(--c2);color:#fff}
+.menu-grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}
+.card-prod{background:#fff;padding:12px;border-radius:10px;border:1px solid var(--border);border-left:4px solid var(--c1);display:flex;flex-direction:column;justify-content:space-between;min-height:95px;box-shadow:0 2px 4px rgba(3,44,28,.05);cursor:pointer}
+.card-prod:active{background:#e8f4f1;transform:scale(.98)}
+.prod-nombre{font-weight:bold;font-size:.95rem;margin-bottom:4px;color:var(--c4)}
+.prod-precio{font-weight:700;color:var(--c2);font-size:1rem}
+.comanda-panel{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--c2);padding:12px 16px;z-index:150;box-shadow:0 -4px 15px rgba(0,14,0,.12)}
+.totales-row{display:flex;justify-content:space-between;font-weight:bold;font-size:1.05rem;margin-bottom:8px;color:var(--c4)}
+.lista-articulos{max-height:110px;overflow-y:auto;border-bottom:1px solid var(--border);margin-bottom:10px;padding-bottom:5px}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #e0ece8;font-size:.9rem}
+.item-row.impreso{color:#7b948d}
+.btn-qty{width:26px;height:26px;border-radius:50%;border:1px solid var(--c2);background:#f0f7f5;color:var(--c3);font-size:1rem;font-weight:bold}
+.acciones-bar{display:flex;gap:8px}
+.btn-comanda{flex:2;background:var(--c1);color:#fff;border:none;padding:13px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer}
+.btn-cuenta{flex:1.3;background:var(--c3);color:#fff;border:none;padding:13px;border-radius:8px;font-weight:bold;font-size:.95rem;cursor:pointer}
+.btn-limpiar{background:#e3ebe8;color:var(--c4);border:none;padding:13px 10px;border-radius:8px;font-size:.85rem;font-weight:bold;cursor:pointer}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,14,0,.6);z-index:300;justify-content:center;align-items:center;padding:16px}
+.modal-content{background:#fff;width:100%;max-width:440px;border-radius:14px;padding:18px;max-height:90vh;overflow-y:auto;position:relative}
+.modal-top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.modal-header{font-weight:bold;font-size:1.15rem;color:var(--c4)}
+.btn-close-modal{background:#eceff1;border:none;width:32px;height:32px;border-radius:50%;font-size:1.1rem;font-weight:bold;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.peso-grid,.refrescos-grid,.opciones-verdura{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.btn-peso{padding:10px;border-radius:8px;border:1px solid var(--border);background:#f8faf9;font-size:.9rem;font-weight:600;cursor:pointer}
+.btn-peso.active{background:var(--c2);color:#fff;border-color:var(--c2)}
+.btn-refresco{padding:14px 8px;border-radius:8px;border:1px solid var(--c2);background:#f0f7f5;font-size:.92rem;font-weight:600;color:var(--c3);cursor:pointer;text-align:center}
+.btn-refresco:active{background:var(--c1);color:#fff}
+.carnes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.check-btn{display:flex;align-items:center;gap:6px;background:#f2f7f5;padding:10px;border-radius:8px;font-size:.9rem;cursor:pointer;border:1px solid var(--border);color:var(--c4)}
+.check-btn input{accent-color:var(--c1);transform:scale(1.2)}
+.btn-verdura{padding:10px;border:1px solid var(--border);border-radius:6px;background:#f8faf9;font-size:.85rem;font-weight:600;cursor:pointer;text-align:center;color:var(--c4)}
+.btn-verdura.active{background:var(--c1);color:#fff;border-color:var(--c1)}
+.modal-btn-confirm{width:100%;background:var(--c2);color:#fff;padding:13px;border:none;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer}
+.metodos-pago{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}
+.btn-metodo{flex:1 1 100px;padding:16px 6px;border-radius:10px;border:2px solid var(--c1);background:#f0f7f5;font-size:.95rem;font-weight:bold;color:var(--c3);cursor:pointer;text-align:center}
+.btn-metodo:active{background:var(--c1);color:#fff}
+.btn-header-corte{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:bold;cursor:pointer}
+.corte-fila{display:flex;justify-content:space-between;padding:12px 4px;border-bottom:1px dashed var(--border);font-size:1.05rem;color:var(--c4)}
+.corte-fila.total{border-bottom:none;border-top:2px solid var(--c2);font-weight:800;font-size:1.25rem;color:var(--c2);margin-top:4px}
+.corte-aviso{background:#fff6e0;border:1px solid #f0c860;color:#7a5a00;border-radius:8px;padding:10px;font-size:.85rem;margin:12px 0 0}
+.input-clave{width:100%;padding:12px;border:1px solid var(--c2);border-radius:8px;font-size:1.1rem;text-align:center;margin:12px 0}
+</style>
 </head>
 <body>
 
-    <header>
-        <h1>🌮 Taquería La Negrita</h1>
-        <button type="button" class="btn-header-corte" onclick="abrirModalCorte()">🧾 Corte de caja</button>
-    </header>
+<header>
+    <h1>🌮 Taquería La Negrita</h1>
+    <button type="button" class="btn-header-corte" onclick="pedirClaveCorte()">🧾 Corte de caja</button>
+</header>
 
-    <div class="mesa-selector">
-        <label for="selectMesa"><strong>Mesa:</strong></label>
-        <select id="selectMesa" onchange="cambiarMesa()">
-            <option value="Mesa 1">Mesa 1</option>
-            <option value="Mesa 2">Mesa 2</option>
-            <option value="Mesa 3">Mesa 3</option>
-            <option value="Mesa 4">Mesa 4</option>
-            <option value="Mesa 5">Mesa 5</option>
-            <option value="Mesa 6">Mesa 6</option>
-            <option value="Barra">Barra</option>
-            <option value="Para Llevar">Para Llevar</option>
-        </select>
+<div class="mesa-selector">
+    <label for="selectMesa"><strong>Mesa:</strong></label>
+    <select id="selectMesa" onchange="cambiarMesa()">
+        <option value="Mesa 1">Mesa 1</option>
+        <option value="Mesa 2">Mesa 2</option>
+        <option value="Mesa 3">Mesa 3</option>
+        <option value="Mesa 4">Mesa 4</option>
+        <option value="Mesa 5">Mesa 5</option>
+        <option value="Mesa 6">Mesa 6</option>
+        <option value="Barra">Barra</option>
+        <option value="Para Llevar">Para Llevar</option>
+    </select>
+</div>
+
+<div class="categorias-bar">
+    <button class="btn-tab active" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
+    <button class="btn-tab" onclick="filtrarCategoria('tortas', event)">Tortas y Antojitos</button>
+    <button class="btn-tab" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
+    <button class="btn-tab" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
+    <button class="btn-tab" onclick="filtrarCategoria('postres', event)">Postres</button>
+</div>
+
+<div class="menu-grid" id="menuGrid"></div>
+
+<div class="comanda-panel">
+    <div class="totales-row">
+        <span id="cantPendiente">0 por mandar</span>
+        <span id="montoTotalMesa">Total: $0.00</span>
     </div>
-
-    <div class="categorias-bar">
-        <button class="btn-tab active" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('tortas', event)">Tortas y Antojitos</button>
-        <button class="btn-tab" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
-        <button class="btn-tab" onclick="filtrarCategoria('postres', event)">Postres</button>
+    <div class="lista-articulos" id="listaArticulos"></div>
+    <div class="acciones-bar">
+        <button class="btn-limpiar" onclick="cerrarMesa()">Liberar</button>
+        <button class="btn-cuenta" onclick="abrirModalCobro()">💳 Cobrar / Cuenta</button>
+        <button class="btn-comanda" onclick="mandarComanda()">🔥 Mandar Comanda</button>
     </div>
+</div>
 
-    <div class="menu-grid" id="menuGrid"></div>
-
-    <div class="comanda-panel">
-        <div class="totales-row">
-            <span id="cantPendiente">0 por mandar</span>
-            <span id="montoTotalMesa">Total: $0.00</span>
+<!-- Modal de Personalización -->
+<div class="modal" id="modalOpciones">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header" id="modalTitulo">Personalizar</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalOpciones()">✖</button>
         </div>
-        <div class="lista-articulos" id="listaArticulos">
-            <div style="text-align: center; color: #789088; font-size: 0.85rem; padding: 10px;">Selecciona productos para armar comanda</div>
-        </div>
-        <div class="acciones-bar">
-            <button class="btn-limpiar" onclick="cerrarMesa()">Liberar</button>
-            <button class="btn-cuenta" onclick="abrirModalCobro()">💳 Cobrar / Cuenta</button>
-            <button class="btn-comanda" onclick="mandarComanda()">🔥 Mandar Comanda</button>
-        </div>
-    </div>
-
-    <!-- Modal de Personalización -->
-    <div class="modal" id="modalOpciones">
-        <div class="modal-content">
-            <div class="modal-top-bar">
-                <div class="modal-header" id="modalTitulo">Personalizar</div>
-                <button type="button" class="btn-close-modal" onclick="cerrarModalOpciones()">✖</button>
-            </div>
-
-            <div id="seccionPeso" style="display: none;">
-                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; color: var(--c4);">Cantidad de Carnitas:</p>
-                <div class="peso-grid">
-                    <button type="button" class="btn-peso" onclick="setPeso(0.25, '1/4 Kg', 112.5, event)">1/4 Kg ($112.50)</button>
-                    <button type="button" class="btn-peso active" onclick="setPeso(0.5, '1/2 Kg', 225, event)">1/2 Kg ($225.00)</button>
-                    <button type="button" class="btn-peso" onclick="setPeso(0.75, '3/4 Kg', 337.5, event)">3/4 Kg ($337.50)</button>
-                    <button type="button" class="btn-peso" onclick="setPeso(1.0, '1 Kg', 450, event)">1 Kg ($450.00)</button>
-                </div>
-            </div>
-            
-            <div id="seccionCarnes">
-                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; color: var(--c4);">Selecciona carne (puedes combinar):</p>
-                <div class="carnes-grid" id="carnesContainer"></div>
-            </div>
-
-            <div id="seccionVerdura">
-                <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; color: var(--c4);">Verdura / Preparación:</p>
-                <div class="opciones-verdura">
-                    <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
-                    <button type="button" class="btn-verdura" id="vSoloCeb" onclick="setVerdura('Solo con cebolla')">Solo cebolla</button>
-                    <button type="button" class="btn-verdura" id="vSoloCil" onclick="setVerdura('Solo con cilantro')">Solo cilantro</button>
-                    <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
-                    <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
-                    <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Sin verdura</button>
-                </div>
-            </div>
-
-            <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem;">
-
-            <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
-        </div>
-    </div>
-
-    <!-- Modal de Refrescos (mini menú) -->
-    <div class="modal" id="modalRefresco">
-        <div class="modal-content">
-            <div class="modal-top-bar">
-                <div class="modal-header">Elige el refresco</div>
-                <button type="button" class="btn-close-modal" onclick="cerrarModalRefresco()">✖</button>
-            </div>
-            <div class="refrescos-grid" id="refrescosContainer"></div>
-        </div>
-    </div>
-
-    <!-- Modal de Cobro (Efectivo / Tarjeta) -->
-    <div class="modal" id="modalCobro">
-        <div class="modal-content">
-            <div class="modal-top-bar">
-                <div class="modal-header">Cobrar Cuenta</div>
-                <button type="button" class="btn-close-modal" onclick="cerrarModalCobro()">✖</button>
-            </div>
-            <p style="font-size: 1.1rem; text-align: center; margin-top: 10px;">Total a pagar:</p>
-            <div style="font-size: 2rem; font-weight: 800; text-align: center; color: var(--c2); margin-bottom: 15px;" id="totalModalCobro">$0.00</div>
-            <p style="font-size: 0.9rem; text-align: center; color: #555;">Selecciona el método de pago del cliente:</p>
-
-            <div class="metodos-pago">
-                <button class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
-                <button class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
-                <button class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
+        <div id="seccionPeso" style="display:none;">
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Cantidad de Carnitas:</p>
+            <div class="peso-grid">
+                <button type="button" class="btn-peso" onclick="setPeso(0.25,'1/4 Kg',112.5,event)">1/4 Kg ($112.50)</button>
+                <button type="button" class="btn-peso active" onclick="setPeso(0.5,'1/2 Kg',225,event)">1/2 Kg ($225.00)</button>
+                <button type="button" class="btn-peso" onclick="setPeso(0.75,'3/4 Kg',337.5,event)">3/4 Kg ($337.50)</button>
+                <button type="button" class="btn-peso" onclick="setPeso(1.0,'1 Kg',450,event)">1 Kg ($450.00)</button>
             </div>
         </div>
-    </div>
-
-    <!-- Modal de Corte de Caja -->
-    <div class="modal" id="modalCorte">
-        <div class="modal-content">
-            <div class="modal-top-bar">
-                <div class="modal-header">Corte de caja</div>
-                <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
+        <div id="seccionCarnes">
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Selecciona carne (puedes combinar):</p>
+            <div class="carnes-grid" id="carnesContainer"></div>
+        </div>
+        <div id="seccionVerdura">
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Verdura / Preparación:</p>
+            <div class="opciones-verdura">
+                <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con Todo')">Con todo</button>
+                <button type="button" class="btn-verdura" id="vSoloCeb" onclick="setVerdura('Solo con cebolla')">Solo cebolla</button>
+                <button type="button" class="btn-verdura" id="vSoloCil" onclick="setVerdura('Solo con cilantro')">Solo cilantro</button>
+                <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
+                <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
+                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo carne')">Sin verdura</button>
             </div>
-            <p id="corteSubtitulo" style="font-size: 0.85rem; color: #555; margin-bottom: 8px;"></p>
-            <div class="corte-fila"><span>💵 Efectivo</span><strong id="corteEfectivo">$0.00</strong></div>
-            <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
-            <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
-            <div class="corte-fila total"><span>Total vendido</span><span id="corteTotal">$0.00</span></div>
-            <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
-            <button class="modal-btn-confirm" style="margin-top: 16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
+        </div>
+        <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:.9rem;">
+        <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
+    </div>
+</div>
+
+<!-- Modal de Refrescos -->
+<div class="modal" id="modalRefresco">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header">Elige el refresco</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalRefresco()">✖</button>
+        </div>
+        <div class="refrescos-grid" id="refrescosContainer"></div>
+    </div>
+</div>
+
+<!-- Modal de Cobro -->
+<div class="modal" id="modalCobro">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header">Cobrar Cuenta</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalCobro()">✖</button>
+        </div>
+        <p style="font-size:1.1rem;text-align:center;margin-top:10px;">Total a pagar:</p>
+        <div style="font-size:2rem;font-weight:800;text-align:center;color:var(--c2);margin-bottom:15px;" id="totalModalCobro">$0.00</div>
+        <p style="font-size:.9rem;text-align:center;color:#555;">Selecciona el método de pago del cliente:</p>
+        <div class="metodos-pago">
+            <button class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
+            <button class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
+            <button class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
         </div>
     </div>
+</div>
 
-    <script>
-        // Servidor Python que corre en la laptop host
-        const SERVIDOR_IMPRESION = "http://192.168.100.49:8080/imprimir";
+<!-- Modal de contraseña del corte -->
+<div class="modal" id="modalClave">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header">🔒 Contraseña</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalClave()">✖</button>
+        </div>
+        <p style="font-size:.9rem;color:#555;">Ingresa la contraseña para hacer el corte de caja:</p>
+        <input type="password" id="inputClave" class="input-clave" placeholder="Contraseña" autocomplete="off" onkeydown="if(event.key==='Enter')validarClave()">
+        <p id="claveError" style="color:#c0392b;font-size:.85rem;display:none;text-align:center;margin-bottom:8px;">Contraseña incorrecta</p>
+        <button class="modal-btn-confirm" onclick="validarClave()">Entrar</button>
+    </div>
+</div>
 
-        // URL de Google Apps Script
-        const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyY9JosIawPskVEiVHqntFNgvmhHg4mX6MskdhMUja5qDJ8H02RZh4ZyFpL4ivmskld/exec";
+<!-- Modal de Corte de Caja -->
+<div class="modal" id="modalCorte">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header">Corte de caja</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
+        </div>
+        <p id="corteSubtitulo" style="font-size:.85rem;color:#555;margin-bottom:8px;"></p>
+        <div class="corte-fila"><span>💵 Efectivo</span><strong id="corteEfectivo">$0.00</strong></div>
+        <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
+        <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
+        <div class="corte-fila total"><span>Total vendido</span><span id="corteTotal">$0.00</span></div>
+        <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
+        <button class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
+    </div>
+</div>
 
-        const TIPOS_CARNE = [
-            "Maciza", "Costilla", "Buche", "Surtido", 
-            "Cuerito", "Barriga", "Hígado", "Trompa", 
-            "Oreja", "Lengua", "Chamorro"
-        ];
+<script>
+const SERVIDOR_IMPRESION = "http://192.168.100.49:8080/imprimir";
+const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyY9JosIawPskVEiVHqntFNgvmhHg4mX6MskdhMUja5qDJ8H02RZh4ZyFpL4ivmskld/exec";
 
-        // Opciones del mini menú de refrescos
-        const SABORES_REFRESCO = [
-            "Coca", "Coca sin azúcar", "Sidral Mundet rojo", "Agua mineral",
-            "Sangría", "Jarritos", "Del Valle de mango"
-        ];
+// Contraseña para hacer el corte de caja (cámbiala por la tuya)
+const CLAVE_CORTE = "1234";
 
-        const PRODUCTOS = [
-            // Tacos y Carnitas
-            { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, esComida: true, llevaCarne: false },
-            { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, esComida: true, llevaCarne: false },
-            { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, esComida: true, llevaCarne: false },
-            { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, esComida: true, llevaCarne: false },
-            { id: 111, cat: 'tacos', nombre: 'Taco de Buche', precio: 20, esComida: true, llevaCarne: false },
-            { id: 112, cat: 'tacos', nombre: 'Taco de Maciza', precio: 20, esComida: true, llevaCarne: false },
-            { id: 113, cat: 'tacos', nombre: 'Taco de Barriga', precio: 20, esComida: true, llevaCarne: false },
-            { id: 114, cat: 'tacos', nombre: 'Taco de Hígado', precio: 20, esComida: true, llevaCarne: false },
-            { id: 115, cat: 'tacos', nombre: 'Taco de Chamorro', precio: 20, esComida: true, llevaCarne: false },
-            { id: 116, cat: 'tacos', nombre: 'Taco Surtido', precio: 20, esComida: true, llevaCarne: false },
-            { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, esComida: true, llevaCarne: false },
-            { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, esComida: true, llevaCarne: true },
-            { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla revuelta)', precio: 20, esComida: true, llevaCarne: true },
-            { id: 109, cat: 'tacos', nombre: 'Carnitas por Kg', precio: 450, esComida: true, llevaCarne: true, esPorKilo: true },
-            { id: 110, cat: 'tacos', nombre: 'Chamorro por pieza', precio: 200, esComida: true, llevaCarne: false },
+const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
+const SABORES_REFRESCO = ["Coca","Coca sin azúcar","Sidral Mundet rojo","Agua mineral","Sangría","Jarritos","Del Valle de mango"];
 
-            // Tortas y Antojitos
-            { id: 201, cat: 'tortas', nombre: 'Torta', precio: 55, esComida: true, llevaCarne: true },
-            { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, esComida: true, llevaCarne: false },
-            { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, esComida: true, llevaCarne: false },
-            { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, esComida: true, llevaCarne: true },
-            { id: 216, cat: 'tortas', nombre: 'Gordita con Queso', precio: 45, esComida: true, llevaCarne: false },
-            { id: 217, cat: 'tortas', nombre: 'Gordita con Carne y Queso', precio: 55, esComida: true, llevaCarne: true },
-            { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, esComida: true, llevaCarne: false },
-            { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, esComida: true, llevaCarne: true },
-            { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false },
-            { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, esComida: true, llevaCarne: true },
-            { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, esComida: true, llevaCarne: false },
-            { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, esComida: true, llevaCarne: true },
-            { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, esComida: true, llevaCarne: true },
-            { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, esComida: false, llevaCarne: false },
-            { id: 213, cat: 'tortas', nombre: 'Orden Extra Salsa', precio: 25, esComida: false, llevaCarne: false },
-            { id: 214, cat: 'tortas', nombre: 'Orden Habanero', precio: 25, esComida: false, llevaCarne: false },
-            { id: 215, cat: 'tortas', nombre: 'Orden Guacamole', precio: 30, esComida: false, llevaCarne: false },
+const PRODUCTOS = [
+    // Tacos y Carnitas
+    { id: 102, cat: 'tacos', nombre: 'Taco de Costilla', precio: 40, esComida: true, llevaCarne: false },
+    { id: 103, cat: 'tacos', nombre: 'Taco de Lengua', precio: 20, esComida: true, llevaCarne: false },
+    { id: 104, cat: 'tacos', nombre: 'Taco de Oreja', precio: 20, esComida: true, llevaCarne: false },
+    { id: 105, cat: 'tacos', nombre: 'Taco de Trompa', precio: 20, esComida: true, llevaCarne: false },
+    { id: 111, cat: 'tacos', nombre: 'Taco de Buche', precio: 20, esComida: true, llevaCarne: false },
+    { id: 112, cat: 'tacos', nombre: 'Taco de Maciza', precio: 20, esComida: true, llevaCarne: false },
+    { id: 113, cat: 'tacos', nombre: 'Taco de Barriga', precio: 20, esComida: true, llevaCarne: false },
+    { id: 114, cat: 'tacos', nombre: 'Taco de Hígado', precio: 20, esComida: true, llevaCarne: false },
+    { id: 115, cat: 'tacos', nombre: 'Taco de Chamorro', precio: 20, esComida: true, llevaCarne: false },
+    { id: 116, cat: 'tacos', nombre: 'Taco Surtido', precio: 20, esComida: true, llevaCarne: false },
+    { id: 106, cat: 'tacos', nombre: 'Taco Riñón', precio: 40, esComida: true, llevaCarne: false },
+    { id: 107, cat: 'tacos', nombre: 'Taco Especial', precio: 40, esComida: true, llevaCarne: true },
+    { id: 108, cat: 'tacos', nombre: 'Taco PET (Tortilla revuelta)', precio: 20, esComida: true, llevaCarne: true },
+    { id: 109, cat: 'tacos', nombre: 'Carnitas por Kg', precio: 450, esComida: true, llevaCarne: true, esPorKilo: true },
+    { id: 110, cat: 'tacos', nombre: 'Chamorro por pieza', precio: 200, esComida: true, llevaCarne: false },
+    // Tortas y Antojitos
+    { id: 201, cat: 'tortas', nombre: 'Torta', precio: 55, esComida: true, llevaCarne: true },
+    { id: 202, cat: 'tortas', nombre: 'Torta Especial', precio: 100, esComida: true, llevaCarne: false },
+    { id: 203, cat: 'tortas', nombre: 'Gordita de Chicharrón', precio: 30, esComida: true, llevaCarne: false },
+    { id: 204, cat: 'tortas', nombre: 'Gordita Chicharrón c/ Carne', precio: 45, esComida: true, llevaCarne: true },
+    { id: 216, cat: 'tortas', nombre: 'Gordita con Queso', precio: 45, esComida: true, llevaCarne: false },
+    { id: 217, cat: 'tortas', nombre: 'Gordita con Carne y Queso', precio: 55, esComida: true, llevaCarne: true },
+    { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, esComida: true, llevaCarne: false },
+    { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, esComida: true, llevaCarne: true },
+    { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false },
+    { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, esComida: true, llevaCarne: true },
+    { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, esComida: true, llevaCarne: false },
+    { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, esComida: true, llevaCarne: true },
+    { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, esComida: true, llevaCarne: true },
+    { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, esComida: false, llevaCarne: false },
+    { id: 213, cat: 'tortas', nombre: 'Orden Extra Salsa', precio: 25, esComida: false, llevaCarne: false },
+    { id: 214, cat: 'tortas', nombre: 'Orden Habanero', precio: 25, esComida: false, llevaCarne: false },
+    { id: 215, cat: 'tortas', nombre: 'Orden Guacamole', precio: 30, esComida: false, llevaCarne: false },
+    // Quesadillas
+    { id: 301, cat: 'quesadillas', nombre: 'Sesadilla', precio: 25, esComida: true, llevaCarne: false },
+    { id: 302, cat: 'quesadillas', nombre: 'Sesadilla Especial', precio: 45, esComida: true, llevaCarne: false },
+    { id: 303, cat: 'quesadillas', nombre: 'Quesadilla Queso (Harina)', precio: 30, esComida: true, llevaCarne: false },
+    { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, esComida: true, llevaCarne: true },
+    // Bebidas
+    { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, esComida: false, llevaCarne: false, esRefresco: true },
+    { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, esComida: false, llevaCarne: false },
+    { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, esComida: false, llevaCarne: false },
+    { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, esComida: false, llevaCarne: false },
+    { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, esComida: false, llevaCarne: false },
+    { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, esComida: false, llevaCarne: false },
+    // Postres
+    { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
+    { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
+    { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
+    { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
+];
 
-            // Quesadillas
-            { id: 301, cat: 'quesadillas', nombre: 'Sesadilla', precio: 25, esComida: true, llevaCarne: false },
-            { id: 302, cat: 'quesadillas', nombre: 'Sesadilla Especial', precio: 45, esComida: true, llevaCarne: false },
-            { id: 303, cat: 'quesadillas', nombre: 'Quesadilla Queso (Harina)', precio: 30, esComida: true, llevaCarne: false },
-            { id: 304, cat: 'quesadillas', nombre: 'Quesadilla Queso con Carne', precio: 50, esComida: true, llevaCarne: true },
+let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
+let mesaActual = "Mesa 1";
+let productoSeleccionado = null;
+let productoRefresco = null;
+let opcionVerduraSeleccionada = "Con Todo";
+let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
+let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
+let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
 
-            // Bebidas
-            { id: 401, cat: 'bebidas', nombre: 'Refresco 600 ml', precio: 35, esComida: false, llevaCarne: false, esRefresco: true },
-            { id: 402, cat: 'bebidas', nombre: 'Cerveza', precio: 55, esComida: false, llevaCarne: false },
-            { id: 403, cat: 'bebidas', nombre: 'Aguas Frescas', precio: 30, esComida: false, llevaCarne: false },
-            { id: 404, cat: 'bebidas', nombre: 'Micheladas', precio: 75, esComida: false, llevaCarne: false },
-            { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, esComida: false, llevaCarne: false },
-            { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, esComida: false, llevaCarne: false },
+function guardarVentasTurno() {
+    localStorage.setItem('ventas_turno_negrita', JSON.stringify(ventasTurno));
+}
 
-            // Postres
-            { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
-            { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
-            { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
-            { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
-        ];
+function dinero(n) {
+    return '$' + Number(n).toFixed(2);
+}
 
-        let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
-        let mesaActual = "Mesa 1";
-        let productoSeleccionado = null;
-        let productoRefresco = null;
-        let opcionVerduraSeleccionada = "Con Todo";
-        let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
-        let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
-        // Ventas cobradas desde el último corte de caja
-        let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
+// ---- Corte de caja ----
+function resumenTurno() {
+    const r = { Efectivo: 0, Tarjeta: 0, Transferencia: 0, total: 0, ordenes: ventasTurno.length };
+    ventasTurno.forEach(v => {
+        const monto = Number(v.total) || 0;
+        const m = String(v.metodo || '').trim().toLowerCase();
+        if (m === 'efectivo') r.Efectivo += monto;
+        else if (m === 'tarjeta') r.Tarjeta += monto;
+        else if (m === 'transferencia') r.Transferencia += monto;
+        r.total += monto;
+    });
+    return r;
+}
 
-        function guardarVentasTurno() {
-            localStorage.setItem('ventas_turno_negrita', JSON.stringify(ventasTurno));
-        }
+function pedirClaveCorte() {
+    document.getElementById("inputClave").value = "";
+    document.getElementById("claveError").style.display = "none";
+    document.getElementById("modalClave").style.display = "flex";
+    setTimeout(() => document.getElementById("inputClave").focus(), 100);
+}
 
-        function dinero(n) {
-            return '$' + Number(n).toFixed(2);
-        }
+function cerrarModalClave() {
+    document.getElementById("modalClave").style.display = "none";
+    document.getElementById("inputClave").value = "";
+}
 
-        function resumenTurno() {
-            const r = { Efectivo: 0, Tarjeta: 0, Transferencia: 0, total: 0, ordenes: ventasTurno.length };
-            ventasTurno.forEach(v => {
-                if (r[v.metodo] !== undefined) r[v.metodo] += v.total;
-                r.total += v.total;
-            });
-            return r;
-        }
+function validarClave() {
+    const ingresada = document.getElementById("inputClave").value;
+    if (ingresada === CLAVE_CORTE) {
+        cerrarModalClave();
+        abrirModalCorte();
+    } else {
+        document.getElementById("claveError").style.display = "block";
+        document.getElementById("inputClave").value = "";
+    }
+}
 
-        function abrirModalCorte() {
-            const r = resumenTurno();
-            document.getElementById("corteEfectivo").innerText = dinero(r.Efectivo);
-            document.getElementById("corteTarjeta").innerText = dinero(r.Tarjeta);
-            document.getElementById("corteTransferencia").innerText = dinero(r.Transferencia);
-            document.getElementById("corteTotal").innerText = dinero(r.total);
-            document.getElementById("corteSubtitulo").innerText = r.ordenes === 0
-                ? "Aún no hay ventas desde el último corte."
-                : `${r.ordenes} orden(es) desde ${ventasTurno[0].fecha}`;
+function abrirModalCorte() {
+    const r = resumenTurno();
+    document.getElementById("corteEfectivo").innerText = dinero(r.Efectivo);
+    document.getElementById("corteTarjeta").innerText = dinero(r.Tarjeta);
+    document.getElementById("corteTransferencia").innerText = dinero(r.Transferencia);
+    document.getElementById("corteTotal").innerText = dinero(r.total);
+    document.getElementById("corteSubtitulo").innerText = r.ordenes === 0
+        ? "Aún no hay ventas desde el último corte."
+        : `${r.ordenes} orden(es) desde ${ventasTurno[0].fecha}`;
 
-            const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m].length > 0);
-            const aviso = document.getElementById("corteAviso");
-            if (abiertas.length > 0) {
-                aviso.style.display = "block";
-                aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en el corte.";
-            } else {
-                aviso.style.display = "none";
-            }
-            document.getElementById("modalCorte").style.display = "flex";
-        }
+    const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m].length > 0);
+    const aviso = document.getElementById("corteAviso");
+    if (abiertas.length > 0) {
+        aviso.style.display = "block";
+        aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en el corte.";
+    } else {
+        aviso.style.display = "none";
+    }
+    document.getElementById("modalCorte").style.display = "flex";
+}
 
-        function cerrarModalCorte() {
-            document.getElementById("modalCorte").style.display = "none";
-        }
+function cerrarModalCorte() {
+    document.getElementById("modalCorte").style.display = "none";
+}
 
-        function confirmarCorte() {
-            if (ventasTurno.length === 0) {
-                alert("No hay ventas que cortar.");
-                return;
-            }
-            if (!confirm("¿Hacer el corte de caja? Los contadores volverán a $0.00.")) return;
+function confirmarCorte() {
+    if (ventasTurno.length === 0) {
+        alert("No hay ventas que cortar.");
+        return;
+    }
+    if (!confirm("¿Hacer el corte de caja? Los contadores volverán a $0.00.")) return;
 
-            const r = resumenTurno();
-            const payload = {
-                tipo: "CORTE",
-                fecha: new Date().toLocaleString('es-MX'),
-                ordenes: r.ordenes,
-                primerFolio: ventasTurno[0].folio,
-                ultimoFolio: ventasTurno[ventasTurno.length - 1].folio,
-                efectivo: r.Efectivo,
-                tarjeta: r.Tarjeta,
-                transferencia: r.Transferencia,
-                total: r.total
-            };
+    const r = resumenTurno();
+    const payload = {
+        tipo: "CORTE",
+        fecha: new Date().toLocaleString('es-MX'),
+        ordenes: r.ordenes,
+        primerFolio: ventasTurno[0].folio,
+        ultimoFolio: ventasTurno[ventasTurno.length - 1].folio,
+        efectivo: r.Efectivo,
+        tarjeta: r.Tarjeta,
+        transferencia: r.Transferencia,
+        total: r.total
+    };
 
-            fetch(URL_GOOGLE_SHEETS, {
-                method: "POST",
-                mode: "no-cors",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            }).then(() => {
-                ventasTurno = [];
-                guardarVentasTurno();
-                cerrarModalCorte();
-                alert(`Corte guardado.\nEfectivo: ${dinero(r.Efectivo)}\nTarjeta: ${dinero(r.Tarjeta)}\nTransferencia: ${dinero(r.Transferencia)}\nTotal: ${dinero(r.total)}`);
-            }).catch(err => {
-                console.error("Error al guardar corte:", err);
-                alert("No se pudo guardar el corte (sin conexión). Inténtalo de nuevo; tus ventas siguen guardadas.");
-            });
-        }
+    fetch(URL_GOOGLE_SHEETS, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        ventasTurno = [];
+        guardarVentasTurno();
+        cerrarModalCorte();
+        alert(`Corte guardado.\nEfectivo: ${dinero(r.Efectivo)}\nTarjeta: ${dinero(r.Tarjeta)}\nTransferencia: ${dinero(r.Transferencia)}\nTotal: ${dinero(r.total)}`);
+    }).catch(err => {
+        console.error("Error al guardar corte:", err);
+        alert("No se pudo guardar el corte (sin conexión). Inténtalo de nuevo; tus ventas siguen guardadas.");
+    });
+}
 
-        function guardarEnAlmacenamiento() {
-            localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-        }
+// ---- Cuentas ----
+function guardarEnAlmacenamiento() {
+    localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+}
 
-        function obtenerMesaActual() {
-            if (!cuentasMesas[mesaActual]) {
-                cuentasMesas[mesaActual] = [];
-            }
-            return cuentasMesas[mesaActual];
-        }
+function obtenerMesaActual() {
+    if (!cuentasMesas[mesaActual]) cuentasMesas[mesaActual] = [];
+    return cuentasMesas[mesaActual];
+}
 
-        function filtrarCategoria(categoria, e = null) {
-            document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
-            
-            if (e && e.target) {
-                e.target.classList.add('active');
-            } else {
-                const btnTabs = Array.from(document.querySelectorAll('.btn-tab'));
-                const btnEncontrado = btnTabs.find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(`'${categoria}'`));
-                if (btnEncontrado) btnEncontrado.classList.add('active');
-            }
+function filtrarCategoria(categoria, e = null) {
+    document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
+    if (e && e.target) {
+        e.target.classList.add('active');
+    } else {
+        const b = Array.from(document.querySelectorAll('.btn-tab')).find(x => x.getAttribute('onclick') && x.getAttribute('onclick').includes(`'${categoria}'`));
+        if (b) b.classList.add('active');
+    }
+    document.getElementById("menuGrid").innerHTML = PRODUCTOS.filter(p => p.cat === categoria).map(p => `
+        <div class="card-prod" onclick="iniciarAgregar(${p.id})">
+            <div class="prod-nombre">${p.nombre}</div>
+            <div class="prod-precio">$${p.precio}</div>
+        </div>`).join('');
+}
 
-            const container = document.getElementById("menuGrid");
-            const prods = PRODUCTOS.filter(p => p.cat === categoria);
+function iniciarAgregar(id) {
+    const prod = PRODUCTOS.find(p => p.id === id);
+    if (!prod) return;
+    if (prod.esRefresco) {
+        abrirModalRefresco(prod);
+    } else if (prod.esComida) {
+        productoSeleccionado = prod;
+        abrirModalOpciones(prod);
+    } else {
+        agregarDirecto(prod.nombre, prod.precio, "");
+    }
+}
 
-            container.innerHTML = prods.map(p => `
-                <div class="card-prod" onclick="iniciarAgregar(${p.id})">
-                    <div class="prod-nombre">${p.nombre}</div>
-                    <div class="prod-precio">$${p.precio}</div>
-                </div>
-            `).join('');
-        }
+// ---- Refrescos ----
+function abrirModalRefresco(prod) {
+    productoRefresco = prod;
+    document.getElementById("refrescosContainer").innerHTML = SABORES_REFRESCO.map((s, i) =>
+        `<button type="button" class="btn-refresco" onclick="elegirRefresco(${i})">${s}</button>`).join('');
+    document.getElementById("modalRefresco").style.display = "flex";
+}
 
-        function iniciarAgregar(id) {
-            const prod = PRODUCTOS.find(p => p.id === id);
-            if (!prod) return;
+function cerrarModalRefresco() {
+    document.getElementById("modalRefresco").style.display = "none";
+    productoRefresco = null;
+}
 
-            if (prod.esRefresco) {
-                abrirModalRefresco(prod);
-            } else if (prod.esComida) {
-                productoSeleccionado = prod;
-                abrirModalOpciones(prod);
-            } else {
-                agregarDirecto(prod.nombre, prod.precio, "");
-            }
-        }
+function elegirRefresco(indice) {
+    if (!productoRefresco) return;
+    agregarDirecto(`Refresco: ${SABORES_REFRESCO[indice]}`, productoRefresco.precio, "");
+    cerrarModalRefresco();
+}
 
-        // ---- Mini menú de refrescos ----
-        function abrirModalRefresco(prod) {
-            productoRefresco = prod;
-            document.getElementById("refrescosContainer").innerHTML = SABORES_REFRESCO.map((s, i) => `
-                <button type="button" class="btn-refresco" onclick="elegirRefresco(${i})">${s}</button>
-            `).join('');
-            document.getElementById("modalRefresco").style.display = "flex";
-        }
+// ---- Opciones de comida ----
+function abrirModalOpciones(prod) {
+    document.getElementById("modalTitulo").innerText = prod.nombre;
+    const secPeso = document.getElementById("seccionPeso");
+    if (prod.esPorKilo) {
+        secPeso.style.display = "block";
+        setPeso(0.5, '1/2 Kg', 225);
+    } else {
+        secPeso.style.display = "none";
+    }
+    const secCarnes = document.getElementById("seccionCarnes");
+    const container = document.getElementById("carnesContainer");
+    if (prod.llevaCarne) {
+        secCarnes.style.display = "block";
+        container.innerHTML = TIPOS_CARNE.map(c => `
+            <label class="check-btn">
+                <input type="checkbox" name="carneCheck" value="${c}">
+                <span>${c}</span>
+            </label>`).join('');
+    } else {
+        secCarnes.style.display = "none";
+        container.innerHTML = "";
+    }
+    setVerdura('Con Todo');
+    document.getElementById("notaExtra").value = "";
+    document.getElementById("modalOpciones").style.display = "flex";
+}
 
-        function cerrarModalRefresco() {
-            document.getElementById("modalRefresco").style.display = "none";
-            productoRefresco = null;
-        }
+function cerrarModalOpciones() {
+    document.getElementById("modalOpciones").style.display = "none";
+    productoSeleccionado = null;
+}
 
-        function elegirRefresco(indice) {
-            if (!productoRefresco) return;
-            const sabor = SABORES_REFRESCO[indice];
-            agregarDirecto(`Refresco: ${sabor}`, productoRefresco.precio, "");
-            cerrarModalRefresco();
-        }
+function setPeso(kilos, etiqueta, precio, e = null) {
+    pesoSeleccionado = { texto: etiqueta, precio: precio };
+    document.querySelectorAll('.btn-peso').forEach(b => b.classList.remove('active'));
+    if (e && e.target) {
+        e.target.classList.add('active');
+    } else {
+        const b = Array.from(document.querySelectorAll('.btn-peso')).find(el => el.textContent.includes(etiqueta));
+        if (b) b.classList.add('active');
+    }
+}
 
-        function abrirModalOpciones(prod) {
-            document.getElementById("modalTitulo").innerText = prod.nombre;
-            
-            const secPeso = document.getElementById("seccionPeso");
-            if (prod.esPorKilo) {
-                secPeso.style.display = "block";
-                setPeso(0.5, '1/2 Kg', 225);
-            } else {
-                secPeso.style.display = "none";
-            }
+function setVerdura(tipo) {
+    opcionVerduraSeleccionada = tipo;
+    document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
+    const ids = { 'Con Todo': 'vTodo', 'Solo con cebolla': 'vSoloCeb', 'Solo con cilantro': 'vSoloCil', 'Sin cebolla': 'vSinCeb', 'Sin cilantro': 'vSinCil', 'Solo carne': 'vSolo' };
+    if (ids[tipo]) document.getElementById(ids[tipo]).classList.add('active');
+}
 
-            const secCarnes = document.getElementById("seccionCarnes");
-            const container = document.getElementById("carnesContainer");
-            if (prod.llevaCarne) {
-                secCarnes.style.display = "block";
-                container.innerHTML = TIPOS_CARNE.map(c => `
-                    <label class="check-btn">
-                        <input type="checkbox" name="carneCheck" value="${c}">
-                        <span>${c}</span>
-                    </label>
-                `).join('');
-            } else {
-                secCarnes.style.display = "none";
-                container.innerHTML = "";
-            }
-            
-            setVerdura('Con Todo');
-            document.getElementById("notaExtra").value = "";
-            document.getElementById("modalOpciones").style.display = "flex";
-        }
+function confirmarAgregarConOpciones() {
+    let nombreFinal = productoSeleccionado.nombre;
+    let precioFinal = productoSeleccionado.precio;
 
-        function cerrarModalOpciones() {
-            document.getElementById("modalOpciones").style.display = "none";
-            productoSeleccionado = null;
-        }
+    if (productoSeleccionado.esPorKilo) {
+        nombreFinal = `Carnitas (${pesoSeleccionado.texto})`;
+        precioFinal = pesoSeleccionado.precio;
+    }
 
-        function setPeso(kilos, etiqueta, precio, e = null) {
-            pesoSeleccionado = { texto: etiqueta, precio: precio };
-            document.querySelectorAll('.btn-peso').forEach(b => b.classList.remove('active'));
-            if (e && e.target) {
-                e.target.classList.add('active');
-            } else {
-                const b = Array.from(document.querySelectorAll('.btn-peso')).find(el => el.textContent.includes(etiqueta));
-                if (b) b.classList.add('active');
-            }
-        }
+    let detalle = [];
+    if (productoSeleccionado.llevaCarne) {
+        const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
+        if (checks.length === 1) detalle.push(checks[0]);
+        else if (checks.length > 1) detalle.push("Combinado: " + checks.join('/'));
+        else detalle.push("Surtido");
+    }
+    detalle.push(opcionVerduraSeleccionada);
 
-        function setVerdura(tipo) {
-            opcionVerduraSeleccionada = tipo;
-            document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
-            if (tipo === 'Con Todo') document.getElementById('vTodo').classList.add('active');
-            if (tipo === 'Solo con cebolla') document.getElementById('vSoloCeb').classList.add('active');
-            if (tipo === 'Solo con cilantro') document.getElementById('vSoloCil').classList.add('active');
-            if (tipo === 'Sin cebolla') document.getElementById('vSinCeb').classList.add('active');
-            if (tipo === 'Sin cilantro') document.getElementById('vSinCil').classList.add('active');
-            if (tipo === 'Solo carne') document.getElementById('vSolo').classList.add('active');
-        }
+    const notaExtra = document.getElementById("notaExtra").value.trim();
+    if (notaExtra) detalle.push(`(${notaExtra})`);
 
-        function confirmarAgregarConOpciones() {
-            let nombreFinal = productoSeleccionado.nombre;
-            let precioFinal = productoSeleccionado.precio;
+    agregarDirecto(nombreFinal, precioFinal, detalle.join(' - '));
+    cerrarModalOpciones();
+}
 
-            if (productoSeleccionado.esPorKilo) {
-                nombreFinal = `Carnitas (${pesoSeleccionado.texto})`;
-                precioFinal = pesoSeleccionado.precio;
-            }
+function agregarDirecto(nombre, precio, notas) {
+    const cuenta = obtenerMesaActual();
+    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso);
+    if (existente) {
+        existente.cant += 1;
+    } else {
+        cuenta.push({ idTemp: Date.now() + Math.random(), nombre, precio, cant: 1, notas, impreso: false });
+    }
+    guardarEnAlmacenamiento();
+    renderComanda();
+}
 
-            let detalle = [];
+function cambiarCantidad(idTemp, delta) {
+    const cuenta = obtenerMesaActual();
+    const index = cuenta.findIndex(item => item.idTemp === idTemp);
+    if (index > -1) {
+        cuenta[index].cant += delta;
+        if (cuenta[index].cant <= 0) cuenta.splice(index, 1);
+    }
+    guardarEnAlmacenamiento();
+    renderComanda();
+}
 
-            if (productoSeleccionado.llevaCarne) {
-                const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
-                if (checks.length === 1) {
-                    detalle.push(checks[0]);
-                } else if (checks.length > 1) {
-                    detalle.push("Combinado: " + checks.join('/'));
-                } else {
-                    detalle.push("Surtido");
-                }
-            }
+function renderComanda() {
+    const cuenta = obtenerMesaActual();
+    const lista = document.getElementById("listaArticulos");
+    const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
+    const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
-            detalle.push(opcionVerduraSeleccionada);
+    document.getElementById("cantPendiente").innerText = `${pendientes} nuevos por comanda`;
+    document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
 
-            const notaExtra = document.getElementById("notaExtra").value.trim();
-            if (notaExtra) detalle.push(`(${notaExtra})`);
+    if (cuenta.length === 0) {
+        lista.innerHTML = `<div style="text-align:center;color:#789088;font-size:.85rem;padding:10px;">Selecciona productos para armar comanda</div>`;
+        return;
+    }
 
-            agregarDirecto(nombreFinal, precioFinal, detalle.join(' - '));
-            cerrarModalOpciones();
-        }
+    lista.innerHTML = cuenta.map(item => `
+        <div class="item-row ${item.impreso ? 'impreso' : ''}">
+            <div style="flex:1;">
+                <strong>${item.nombre}</strong> ${item.impreso ? '✓' : ''}
+                ${item.notas ? `<div style="font-size:.75rem;color:#0B8770;">${item.notas}</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>` : ''}
+                <span>${item.cant}</span>
+                ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>` : ''}
+                <span style="font-weight:bold;min-width:45px;text-align:right;">$${item.cant * item.precio}</span>
+            </div>
+        </div>`).join('');
+}
 
-        function agregarDirecto(nombre, precio, notas) {
-            const cuenta = obtenerMesaActual();
-            const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso);
+function cambiarMesa() {
+    mesaActual = document.getElementById("selectMesa").value;
+    renderComanda();
+}
 
-            if (existente) {
-                existente.cant += 1;
-            } else {
-                cuenta.push({
-                    idTemp: Date.now() + Math.random(),
-                    nombre: nombre,
-                    precio: precio,
-                    cant: 1,
-                    notas: notas,
-                    impreso: false
-                });
-            }
-
+async function mandarComanda() {
+    const cuenta = obtenerMesaActual();
+    const nuevos = cuenta.filter(i => !i.impreso);
+    if (nuevos.length === 0) {
+        alert("No hay productos nuevos para enviar a cocina.");
+        return;
+    }
+    const payload = {
+        tipo: "COMANDA",
+        ubicacion: mesaActual,
+        fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        orden: nuevos.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas }))
+    };
+    try {
+        const res = await fetch(SERVIDOR_IMPRESION, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            nuevos.forEach(i => i.impreso = true);
             guardarEnAlmacenamiento();
             renderComanda();
+            alert("¡Ticket enviado a cocina!");
+        } else {
+            alert("Error en el servidor de impresión.");
         }
+    } catch (err) {
+        alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
+    }
+}
 
-        function cambiarCantidad(idTemp, delta) {
-            const cuenta = obtenerMesaActual();
-            const index = cuenta.findIndex(item => item.idTemp === idTemp);
-            if (index > -1) {
-                cuenta[index].cant += delta;
-                if (cuenta[index].cant <= 0) {
-                    cuenta.splice(index, 1);
-                }
-            }
-            guardarEnAlmacenamiento();
-            renderComanda();
-        }
+// ---- Cobro ----
+function abrirModalCobro() {
+    const cuenta = obtenerMesaActual();
+    if (cuenta.length === 0) {
+        alert("La mesa no tiene consumo registrado.");
+        return;
+    }
+    const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
+    document.getElementById("totalModalCobro").innerText = `$${total.toFixed(2)}`;
+    document.getElementById("modalCobro").style.display = "flex";
+}
 
-        function renderComanda() {
-            const cuenta = obtenerMesaActual();
-            const lista = document.getElementById("listaArticulos");
+function cerrarModalCobro() {
+    document.getElementById("modalCobro").style.display = "none";
+}
 
-            const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
-            const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
+async function procesarPago(metodoPago) {
+    const cuenta = obtenerMesaActual();
+    if (cuenta.length === 0) return;
 
-            document.getElementById("cantPendiente").innerText = `${pendientes} nuevos por comanda`;
-            document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
+    const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
+    const fechaHora = new Date().toLocaleString('es-MX');
+    const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
 
-            if (cuenta.length === 0) {
-                lista.innerHTML = `<div style="text-align: center; color: #789088; font-size: 0.85rem; padding: 10px;">Selecciona productos para armar comanda</div>`;
-                return;
-            }
+    // 1. Ticket de cuenta final
+    fetch(SERVIDOR_IMPRESION, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            tipo: "CUENTA",
+            numeroOrden: ordenFolio,
+            ubicacion: `${mesaActual} (${metodoPago})`,
+            fecha: fechaHora,
+            orden: cuenta.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas })),
+            total: total
+        })
+    }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
 
-            lista.innerHTML = cuenta.map(item => `
-                <div class="item-row ${item.impreso ? 'impreso' : ''}">
-                    <div style="flex: 1;">
-                        <strong>${item.nombre}</strong> ${item.impreso ? '✓' : ''}
-                        ${item.notas ? `<div style="font-size:0.75rem; color:#0B8770;">${item.notas}</div>` : ''}
-                    </div>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>` : ''}
-                        <span>${item.cant}</span>
-                        ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>` : ''}
-                        <span style="font-weight:bold; min-width:45px; text-align:right;">$${item.cant * item.precio}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function cambiarMesa() {
-            mesaActual = document.getElementById("selectMesa").value;
-            renderComanda();
-        }
-
-        async function mandarComanda() {
-            const cuenta = obtenerMesaActual();
-            const nuevos = cuenta.filter(i => !i.impreso);
-
-            if (nuevos.length === 0) {
-                alert("No hay productos nuevos para enviar a cocina.");
-                return;
-            }
-
-            const payload = {
-                tipo: "COMANDA",
-                ubicacion: mesaActual,
-                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                orden: nuevos.map(i => ({
-                    cant: i.cant,
-                    nombre: i.nombre,
-                    notas: i.notas
-                }))
-            };
-
-            try {
-                const res = await fetch(SERVIDOR_IMPRESION, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    nuevos.forEach(i => i.impreso = true);
-                    guardarEnAlmacenamiento();
-                    renderComanda();
-                    alert("¡Ticket enviado a cocina!");
-                } else {
-                    alert("Error en el servidor de impresión.");
-                }
-            } catch (err) {
-                alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
-            }
-        }
-
-        function abrirModalCobro() {
-            const cuenta = obtenerMesaActual();
-            if (cuenta.length === 0) {
-                alert("La mesa no tiene consumo registrado.");
-                return;
-            }
-            const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
-            document.getElementById("totalModalCobro").innerText = `$${total.toFixed(2)}`;
-            document.getElementById("modalCobro").style.display = "flex";
-        }
-
-        function cerrarModalCobro() {
-            document.getElementById("modalCobro").style.display = "none";
-        }
-
-        async function procesarPago(metodoPago) {
-            const cuenta = obtenerMesaActual();
-            if (cuenta.length === 0) return;
-
-            const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
-            const fechaHora = new Date().toLocaleString('es-MX');
-            const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
-
-            // 1. Imprimir ticket de cuenta final
-            const payloadImpresion = {
-                tipo: "CUENTA",
+    // 2. Guardar en Google Sheets
+    if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
+        fetch(URL_GOOGLE_SHEETS, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                tipo: "VENTA",
                 numeroOrden: ordenFolio,
-                ubicacion: `${mesaActual} (${metodoPago})`,
                 fecha: fechaHora,
-                orden: cuenta.map(i => ({
-                    cant: i.cant,
-                    nombre: `${i.nombre} ($${i.precio})`,
-                    notas: i.notas
-                })),
-                total: total
-            };
+                mesa: mesaActual,
+                metodoPago: metodoPago,
+                total: total,
+                productos: cuenta.map(i => ({
+                    nombre: i.nombre,
+                    notas: i.notas || "",
+                    cantidad: i.cant,
+                    precioUnitario: i.precio,
+                    subtotal: i.cant * i.precio
+                }))
+            })
+        }).then(() => console.log("Venta guardada en Sheets."))
+          .catch(err => console.error("Error al guardar en Sheets:", err));
+    }
 
-            fetch(SERVIDOR_IMPRESION, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payloadImpresion)
-            }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
+    // 3. Registrar en el turno para el corte
+    ventasTurno.push({ folio: ordenFolio, fecha: fechaHora, metodo: metodoPago, total: total });
+    guardarVentasTurno();
 
-            // 2. Guardar en Google Sheets
-            if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
-                const payloadSheets = {
-                    tipo: "VENTA",
-                    numeroOrden: ordenFolio,
-                    fecha: fechaHora,
-                    mesa: mesaActual,
-                    metodoPago: metodoPago,
-                    productos: cuenta.map(i => ({
-                        nombre: i.nombre,
-                        notas: i.notas || "",
-                        cantidad: i.cant,
-                        precioUnitario: i.precio,
-                        subtotal: i.cant * i.precio
-                    }))
-                };
+    numeroOrdenActual++;
+    localStorage.setItem('num_orden_negrita', numeroOrdenActual);
 
-                fetch(URL_GOOGLE_SHEETS, {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payloadSheets)
-                }).then(() => {
-                    console.log("Venta guardada en Sheets correctamente.");
-                }).catch(err => {
-                    console.error("Error al guardar en Sheets:", err);
-                });
-            }
+    alert(`¡Cobro exitoso con ${metodoPago}! Orden ${ordenFolio} registrada.`);
+    cerrarModalCobro();
+    cuentasMesas[mesaActual] = [];
+    guardarEnAlmacenamiento();
+    renderComanda();
+}
 
-            ventasTurno.push({ folio: ordenFolio, fecha: fechaHora, metodo: metodoPago, total: total });
-            guardarVentasTurno();
-
-            numeroOrdenActual++;
-            localStorage.setItem('num_orden_negrita', numeroOrdenActual);
-
-            alert(`¡Cobro exitoso con ${metodoPago}! Orden ${ordenFolio} registrada.`);
-            cerrarModalCobro();
-            cuentasMesas[mesaActual] = [];
-            guardarEnAlmacenamiento();
-            renderComanda();
-        }
-
-        function cerrarMesa() {
-            if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
-                cuentasMesas[mesaActual] = [];
-                guardarEnAlmacenamiento();
-                renderComanda();
-            }
-        }
-
-        // Arranque inicial
-        filtrarCategoria('tacos');
+function cerrarMesa() {
+    if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
+        cuentasMesas[mesaActual] = [];
+        guardarEnAlmacenamiento();
         renderComanda();
-    </script>
+    }
+}
+
+// Arranque inicial
+filtrarCategoria('tacos');
+renderComanda();
+</script>
 </body>
 </html>
