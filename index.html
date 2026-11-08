@@ -29,6 +29,9 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 .prod-nombre{font-weight:bold;font-size:.95rem;margin-bottom:4px;color:var(--c4)}
 .prod-precio{font-weight:700;color:var(--c2);font-size:1rem}
 .comanda-panel{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--c2);padding:12px 16px;z-index:150;box-shadow:0 -4px 15px rgba(0,14,0,.12)}
+.resize-handle{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 10px;margin:-12px -16px 4px;cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none}
+.resize-handle span{width:56px;height:5px;border-radius:3px;background:#b9c9c4}
+.resize-handle small{font-size:.65rem;color:#789088}
 .totales-row{display:flex;justify-content:space-between;font-weight:bold;font-size:1.05rem;margin-bottom:8px;color:var(--c4)}
 .lista-articulos{max-height:170px;overflow-y:auto;border-bottom:1px solid var(--border);margin-bottom:10px;padding-bottom:5px}
 .persona-grupo-header{display:flex;justify-content:space-between;align-items:center;background:#e1ebe7;color:var(--c3);font-weight:800;font-size:.85rem;padding:5px 8px;border-radius:6px;margin-top:6px}
@@ -105,7 +108,10 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 
 <div class="menu-grid" id="menuGrid"></div>
 
-<div class="comanda-panel">
+<div class="comanda-panel" id="comandaPanel">
+    <div class="resize-handle" id="resizeHandle" title="Arrastra para ajustar. Doble toque para restablecer.">
+        <span></span><small>↕ arrastra para ajustar</small>
+    </div>
     <div class="totales-row">
         <span id="cantPendiente">0 por mandar</span>
         <span id="montoTotalMesa">Total: $0.00</span>
@@ -817,6 +823,57 @@ function cerrarMesa() {
         renderComanda();
     }
 }
+
+// ---- Ajuste de altura de la comanda (arrastrar la barrita) ----
+const ALTURA_LISTA_DEFECTO = 170;
+const listaEl = document.getElementById("listaArticulos");
+const panelEl = document.getElementById("comandaPanel");
+
+function aplicarAlturaLista(h) {
+    const max = Math.round(window.innerHeight * 0.65);
+    h = Math.max(40, Math.min(max, h));
+    listaEl.style.height = h + 'px';
+    listaEl.style.maxHeight = h + 'px';
+    return h;
+}
+
+function ajustarEspacioInferior() {
+    document.body.style.paddingBottom = (panelEl.offsetHeight + 16) + 'px';
+}
+
+(function iniciarAjusteComanda() {
+    const guardada = parseInt(localStorage.getItem('altura_comanda_negrita') || '0');
+    aplicarAlturaLista(guardada > 0 ? guardada : ALTURA_LISTA_DEFECTO);
+
+    const handle = document.getElementById("resizeHandle");
+    let inicioY = 0, inicioH = 0, arrastrando = false;
+
+    handle.addEventListener('pointerdown', e => {
+        arrastrando = true;
+        inicioY = e.clientY;
+        inicioH = listaEl.offsetHeight;
+        handle.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+    handle.addEventListener('pointermove', e => {
+        if (!arrastrando) return;
+        aplicarAlturaLista(inicioH + (inicioY - e.clientY));
+    });
+    const soltar = () => {
+        if (!arrastrando) return;
+        arrastrando = false;
+        localStorage.setItem('altura_comanda_negrita', listaEl.offsetHeight);
+    };
+    handle.addEventListener('pointerup', soltar);
+    handle.addEventListener('pointercancel', soltar);
+    handle.addEventListener('dblclick', () => {
+        aplicarAlturaLista(ALTURA_LISTA_DEFECTO);
+        localStorage.setItem('altura_comanda_negrita', ALTURA_LISTA_DEFECTO);
+    });
+
+    new ResizeObserver(ajustarEspacioInferior).observe(panelEl);
+    window.addEventListener('resize', () => aplicarAlturaLista(listaEl.offsetHeight));
+})();
 
 // Arranque inicial
 filtrarCategoria('tacos');
