@@ -688,7 +688,7 @@ function confirmarAgregarConOpciones() {
 function agregarDirecto(nombre, precio, notas) {
     const cuenta = obtenerMesaActual();
     const persona = infoPersonas().actual;
-    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso && personaDeItem(item) === persona);
+    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso && !item.entregado && personaDeItem(item) === persona);
     if (existente) {
         existente.cant += 1;
     } else {
@@ -716,7 +716,7 @@ function renderComanda() {
     const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
     const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
-    const porEntregarCant = cuenta.filter(i => i.impreso && !i.entregado).reduce((acc, i) => acc + i.cant, 0);
+    const porEntregarCant = cuenta.filter(i => !i.entregado).reduce((acc, i) => acc + i.cant, 0);
     document.getElementById("cantPendiente").innerText = `${pendientes} por mandar · ${porEntregarCant} por entregar`;
     document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
     renderPersonas();
@@ -791,16 +791,20 @@ async function mandarComanda() {
 // ---- Entregado ----
 function marcarEntregado() {
     const cuenta = obtenerMesaActual();
-    const porEntregar = cuenta.filter(i => i.impreso && !i.entregado);
+    const porEntregar = cuenta.filter(i => !i.entregado);
     if (porEntregar.length === 0) {
-        const sinMandar = cuenta.some(i => !i.impreso);
-        alert(sinMandar
-            ? "Hay productos que aún no se mandan a cocina. Manda la comanda primero."
-            : "No hay productos pendientes por entregar.");
+        alert("No hay productos pendientes por entregar.");
         return;
     }
     porEntregar.forEach(i => i.entregado = true);
-    guardarEnAlmacenamiento();   // sincroniza con los demás meseros
+
+    localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+    // Se envía al servidor para guardarlo y sincronizarlo con los demás dispositivos
+    socket.emit('marcar_entregado', {
+        mesa: mesaActual,
+        items: cuenta,
+        personas: infoPersonas()
+    });
     renderComanda();
 }
 
