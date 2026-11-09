@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>POS Taquería La Negrita</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
 :root{--c1:#0B8770;--c2:#086954;--c3:#064B38;--c4:#032C1C;--c5:#000E00;--bg:#f2f5f4;--border:#d2deda}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
@@ -223,7 +224,11 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 const SERVIDOR_IMPRESION = "http://192.168.100.5:8080/imprimir";
 const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbz18IWzdxjJdH5KUGGgqrW0Jeiu-mdTSDQ2Bauc4ZPga6FFtLE0Td5R9yZhOkj-6zmK7w/exec";
 
-// Contraseña para hacer el corte de caja (cámbiala por la tuya)
+// Servidor central de sincronización
+const SERVIDOR_SYNC = "http://192.168.100.5:3001";
+const socket = io(SERVIDOR_SYNC);
+
+// Contraseña para hacer el corte de caja
 const CLAVE_CORTE = "1234";
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
@@ -278,7 +283,6 @@ const PRODUCTOS = [
     { id: 405, cat: 'bebidas', nombre: 'Mineral Preparado', precio: 45, esComida: false, llevaCarne: false },
     { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, esComida: false, llevaCarne: false },
     { id: 407, cat: 'bebidas', nombre: 'Agua natural', precio: 25, esComida: false, llevaCarne: false },
-    
     // Postres
     { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
     { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
@@ -286,7 +290,12 @@ const PRODUCTOS = [
     { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
 ];
 
-let cuentasMesas = JSON.parse(localStorage.getItem('cuentas_negrita') || '{}');
+let cuentasMesas = {
+    "Mesa 1": [], "Mesa 2": [], "Mesa 3": [], "Mesa 4": [],
+    "Mesa 5": [], "Mesa 6": [], "Mesa 7": [],
+    "De pie 1": [], "De pie 2": [], "De pie 3": [], "De pie 4": [], "De pie 5": [],
+    "Barra": [], "Para Llevar": []
+};
 let personasMesas = JSON.parse(localStorage.getItem('personas_negrita') || '{}');
 let mesaActual = "Mesa 1";
 let productoSeleccionado = null;
@@ -295,6 +304,40 @@ let opcionVerduraSeleccionada = "Con todo";
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
 let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
+
+// Sincronización Socket.IO en tiempo real
+socket.on('estado_inicial', (db) => {
+    if (db && db.cuentas) {
+        cuentasMesas = Object.assign(cuentasMesas, db.cuentas);
+        personasMesas = Object.assign(personasMesas, db.personas || {});
+        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+        renderComanda();
+    }
+});
+
+socket.on('mesa_actualizada', (data) => {
+    if (data && data.mesa) {
+        cuentasMesas[data.mesa] = data.items || [];
+        if (data.personas) personasMesas[data.mesa] = data.personas;
+        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+        if (mesaActual === data.mesa) {
+            renderComanda();
+        }
+    }
+});
+
+socket.on('personas_actualizadas', (data) => {
+    if (data && data.mesa) {
+        personasMesas[data.mesa] = data.personas;
+        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+        if (mesaActual === data.mesa) {
+            renderPersonas();
+            renderComanda();
+        }
+    }
+});
 
 function guardarVentasTurno() {
     localStorage.setItem('ventas_turno_negrita', JSON.stringify(ventasTurno));
@@ -307,6 +350,10 @@ function dinero(n) {
 // ---- Personas ----
 function guardarPersonas() {
     localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+    socket.emit('actualizar_personas', {
+        mesa: mesaActual,
+        personas: infoPersonas()
+    });
 }
 
 function personaDeItem(item) {
@@ -316,7 +363,6 @@ function personaDeItem(item) {
 function infoPersonas() {
     if (!personasMesas[mesaActual]) personasMesas[mesaActual] = { total: 1, actual: 1 };
     const info = personasMesas[mesaActual];
-    // Asegura que el total cubra a todas las personas que ya tienen artículos
     const cuenta = cuentasMesas[mesaActual] || [];
     const maxItem = cuenta.reduce((m, i) => Math.max(m, personaDeItem(i)), 1);
     if (info.total < maxItem) info.total = maxItem;
@@ -371,16 +417,14 @@ function quitarPersona() {
 
 function reiniciarPersonas(mesa) {
     personasMesas[mesa] = { total: 1, actual: 1 };
-    guardarPersonas();
+    localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
 }
 
-// Agrupa artículos por persona -> [{persona, items}]
 function agruparPorPersona(items) {
     const nums = [...new Set(items.map(personaDeItem))].sort((a, b) => a - b);
     return nums.map(n => ({ persona: n, items: items.filter(i => personaDeItem(i) === n) }));
 }
 
-// Arma la lista para imprimir con encabezado por persona
 function armarOrdenImpresion(items, formatoNombre, conSubtotal) {
     const out = [];
     agruparPorPersona(items).forEach(g => {
@@ -438,7 +482,7 @@ function abrirModalCorte() {
         ? "Aún no hay ventas desde el último corte."
         : `${r.ordenes} orden(es) desde ${ventasTurno[0].fecha}`;
 
-    const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m].length > 0);
+    const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m] && cuentasMesas[m].length > 0);
     const aviso = document.getElementById("corteAviso");
     if (abiertas.length > 0) {
         aviso.style.display = "block";
@@ -489,9 +533,14 @@ function confirmarCorte() {
     });
 }
 
-// ---- Cuentas ----
+// ---- Cuentas y sincronización con el servidor ----
 function guardarEnAlmacenamiento() {
     localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
+    socket.emit('actualizar_mesa', {
+        mesa: mesaActual,
+        items: obtenerMesaActual(),
+        personas: infoPersonas()
+    });
 }
 
 function obtenerMesaActual() {
@@ -757,7 +806,7 @@ async function procesarPago(metodoPago) {
     const fechaHora = new Date().toLocaleString('es-MX');
     const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
 
-    // 1. Ticket de cuenta final (separado por persona)
+    // 1. Imprimir ticket final agrupado por persona
     fetch(SERVIDOR_IMPRESION, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -802,7 +851,7 @@ async function procesarPago(metodoPago) {
           .catch(err => console.error("Error al guardar en Sheets:", err));
     }
 
-    // 3. Registrar en el turno para el corte
+    // 3. Registrar corte
     ventasTurno.push({ folio: ordenFolio, fecha: fechaHora, metodo: metodoPago, total: total });
     guardarVentasTurno();
 
@@ -811,22 +860,26 @@ async function procesarPago(metodoPago) {
 
     alert(`¡Cobro exitoso con ${metodoPago}! Orden ${ordenFolio} registrada.`);
     cerrarModalCobro();
+
+    // Vaciar mesa y notificar al servidor
     cuentasMesas[mesaActual] = [];
-    guardarEnAlmacenamiento();
+    localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
     reiniciarPersonas(mesaActual);
+    socket.emit('liberar_mesa', mesaActual);
     renderComanda();
 }
 
 function cerrarMesa() {
     if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
         cuentasMesas[mesaActual] = [];
-        guardarEnAlmacenamiento();
+        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
         reiniciarPersonas(mesaActual);
+        socket.emit('liberar_mesa', mesaActual);
         renderComanda();
     }
 }
 
-// ---- Ajuste de altura de la comanda (arrastrar la barrita) ----
+// ---- Ajuste de altura de la comanda ----
 const ALTURA_LISTA_DEFECTO = 170;
 const listaEl = document.getElementById("listaArticulos");
 const panelEl = document.getElementById("comandaPanel");
