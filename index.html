@@ -11,6 +11,7 @@
 body{background:var(--bg);color:var(--c5);padding-bottom:300px}
 header{background:linear-gradient(135deg,var(--c3),var(--c4));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,14,0,.3)}
 header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
+.header-actions{display:flex;gap:8px}
 .mesa-selector{background:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
 .mesa-selector select{flex:1;padding:10px;border-radius:8px;border:1px solid var(--c2);font-size:1rem;font-weight:600;background:#fff;color:var(--c4)}
 .personas-bar{display:flex;overflow-x:auto;background:#fff;padding:8px 12px;gap:8px;white-space:nowrap;scrollbar-width:none;border-bottom:1px solid var(--border);align-items:center}
@@ -67,18 +68,26 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 .metodos-pago{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}
 .btn-metodo{flex:1 1 100px;padding:16px 6px;border-radius:10px;border:2px solid var(--c1);background:#f0f7f5;font-size:.95rem;font-weight:bold;color:var(--c3);cursor:pointer;text-align:center}
 .btn-metodo:active{background:var(--c1);color:#fff}
-.btn-header-corte{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:bold;cursor:pointer}
-.corte-fila{display:flex;justify-content:space-between;padding:12px 4px;border-bottom:1px dashed var(--border);font-size:1.05rem;color:var(--c4)}
-.corte-fila.total{border-bottom:none;border-top:2px solid var(--c2);font-weight:800;font-size:1.25rem;color:var(--c2);margin-top:4px}
+.btn-header-action{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:6px 10px;font-size:.82rem;font-weight:bold;cursor:pointer}
+.corte-fila{display:flex;justify-content:space-between;padding:10px 4px;border-bottom:1px dashed var(--border);font-size:1rem;color:var(--c4)}
+.corte-fila.total{border-bottom:none;border-top:2px solid var(--c2);font-weight:800;font-size:1.2rem;color:var(--c2);margin-top:6px}
+.corte-fila.gasto{color:#c0392b}
 .corte-aviso{background:#fff6e0;border:1px solid #f0c860;color:#7a5a00;border-radius:8px;padding:10px;font-size:.85rem;margin:12px 0 0}
 .input-clave{width:100%;padding:12px;border:1px solid var(--c2);border-radius:8px;font-size:1.1rem;text-align:center;margin:12px 0}
+.tabla-gastos{width:100%;border-collapse:collapse;margin:12px 0;font-size:.9rem}
+.tabla-gastos th{background:#e1ebe7;color:var(--c3);padding:8px;text-align:left}
+.tabla-gastos td{padding:8px;border-bottom:1px solid var(--border)}
+.btn-del-gasto{background:#ff4d4d;color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:.8rem;cursor:pointer}
 </style>
 </head>
 <body>
 
 <header>
     <h1>🌮 Taquería La Negrita</h1>
-    <button type="button" class="btn-header-corte" onclick="pedirClaveCorte()">🧾 Corte de caja</button>
+    <div class="header-actions">
+        <button type="button" class="btn-header-action" onclick="abrirAccesoProtegido('gastos')">💸 Gastos</button>
+        <button type="button" class="btn-header-action" onclick="abrirAccesoProtegido('corte')">🧾 Corte</button>
+    </div>
 </header>
 
 <div class="mesa-selector">
@@ -150,16 +159,40 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
             <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Selecciona carne (puedes combinar):</p>
             <div class="carnes-grid" id="carnesContainer"></div>
         </div>
-        <div id="seccionVerdura">
+
+        <!-- Opciones para productos generales -->
+        <div id="seccionVerduraGeneral">
             <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Verdura / Preparación:</p>
             <div class="opciones-verdura">
                 <button type="button" class="btn-verdura active" id="vTodo" onclick="setVerdura('Con todo')">Con todo</button>
-                <button type="button" class="btn-verdura" id="vSinCeb" onclick="setVerdura('Sin cebolla')">Sin cebolla</button>
-                <button type="button" class="btn-verdura" id="vSinCil" onclick="setVerdura('Sin cilantro')">Sin cilantro</button>
-                <button type="button" class="btn-verdura" id="vSoloVerd" onclick="setVerdura('Solo verdura')">Solo verdura</button>
-                <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo')">Solo</button>
+                <button type="button" class="btn-verdura" id="vSolos" onclick="setVerdura('Solos')">Solos</button>
+                <button type="button" class="btn-verdura" id="vVerdura" onclick="setVerdura('Verdura')">Verdura</button>
+                <button type="button" class="btn-verdura" id="vPuroCil" onclick="setVerdura('Puro cilantro')">Puro cilantro</button>
+                <button type="button" class="btn-verdura" id="vPuraCeb" onclick="setVerdura('Pura cebolla')">Pura cebolla</button>
             </div>
         </div>
+
+        <!-- Opciones exclusivas para Huaraches -->
+        <div id="seccionHuarache" style="display:none;">
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Salsa:</p>
+            <div class="opciones-verdura" style="margin-bottom:10px;">
+                <button type="button" class="btn-verdura active" id="hSalsaVerde" onclick="setHuaracheSalsa('Salsa verde')">Salsa verde</button>
+                <button type="button" class="btn-verdura" id="hSalsaRoja" onclick="setHuaracheSalsa('Salsa roja')">Salsa roja</button>
+                <button type="button" class="btn-verdura" id="hSalsaAmbas" onclick="setHuaracheSalsa('Salsa verde y roja')">Verde y roja</button>
+                <button type="button" class="btn-verdura" id="hSinSalsa" onclick="setHuaracheSalsa('Sin salsa')">Sin salsa</button>
+            </div>
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Queso:</p>
+            <div class="opciones-verdura" style="margin-bottom:10px;">
+                <button type="button" class="btn-verdura active" id="hConQueso" onclick="setHuaracheQueso('Con queso')">Con queso</button>
+                <button type="button" class="btn-verdura" id="hSinQueso" onclick="setHuaracheQueso('Sin queso')">Sin queso</button>
+            </div>
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:var(--c4);">Cebolla:</p>
+            <div class="opciones-verdura">
+                <button type="button" class="btn-verdura active" id="hConCebolla" onclick="setHuaracheCebolla('Con cebolla')">Con cebolla</button>
+                <button type="button" class="btn-verdura" id="hSinCebolla" onclick="setHuaracheCebolla('Sin cebolla')">Sin cebolla</button>
+            </div>
+        </div>
+
         <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:.9rem;">
         <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
     </div>
@@ -194,17 +227,46 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
     </div>
 </div>
 
-<!-- Modal de contraseña del corte -->
+<!-- Modal de contraseña unificado -->
 <div class="modal" id="modalClave">
     <div class="modal-content">
         <div class="modal-top-bar">
-            <div class="modal-header">🔒 Contraseña</div>
+            <div class="modal-header" id="tituloModalClave">🔒 Contraseña Requerida</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalClave()">✖</button>
         </div>
-        <p style="font-size:.9rem;color:#555;">Ingresa la contraseña para hacer el corte de caja:</p>
+        <p style="font-size:.9rem;color:#555;" id="subtituloModalClave">Ingresa la contraseña autorizada:</p>
         <input type="password" id="inputClave" class="input-clave" placeholder="Contraseña" autocomplete="off" onkeydown="if(event.key==='Enter')validarClave()">
         <p id="claveError" style="color:#c0392b;font-size:.85rem;display:none;text-align:center;margin-bottom:8px;">Contraseña incorrecta</p>
         <button class="modal-btn-confirm" onclick="validarClave()">Entrar</button>
+    </div>
+</div>
+
+<!-- Modal de Gastos -->
+<div class="modal" id="modalGastos">
+    <div class="modal-content">
+        <div class="modal-top-bar">
+            <div class="modal-header">💸 Gastos del Turno</div>
+            <button type="button" class="btn-close-modal" onclick="cerrarModalGastos()">✖</button>
+        </div>
+        <p style="font-size:.85rem;color:#555;margin-bottom:10px;">Registra salidas de dinero (verduras, gas, refrescos, etc.):</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="gastoConcepto" placeholder="Concepto (ej: Verdura)" style="flex:2;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;">
+            <input type="number" id="gastoMonto" placeholder="$ Monto" step="0.5" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;">
+        </div>
+        <button class="modal-btn-confirm" style="padding:10px;font-size:.9rem;margin-bottom:12px;" onclick="agregarGasto()">+ Registrar Gasto</button>
+        
+        <div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <table class="tabla-gastos">
+                <thead>
+                    <tr><th>Hora</th><th>Concepto</th><th>Monto</th><th></th></tr>
+                </thead>
+                <tbody id="listaGastosBody"></tbody>
+            </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:10px;font-weight:bold;color:#c0392b;">
+            <span>Total Gastos:</span>
+            <span id="totalGastosVista">$0.00</span>
+        </div>
     </div>
 </div>
 
@@ -212,14 +274,17 @@ header h1{font-size:1.15rem;font-weight:700;letter-spacing:.5px}
 <div class="modal" id="modalCorte">
     <div class="modal-content">
         <div class="modal-top-bar">
-            <div class="modal-header">Corte de caja</div>
+            <div class="modal-header">Corte de caja (Todos los dispositivos)</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
         </div>
         <p id="corteSubtitulo" style="font-size:.85rem;color:#555;margin-bottom:8px;"></p>
-        <div class="corte-fila"><span>💵 Efectivo</span><strong id="corteEfectivo">$0.00</strong></div>
-        <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
-        <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
-        <div class="corte-fila total"><span>Total vendido</span><span id="corteTotal">$0.00</span></div>
+        <div class="corte-fila"><span>💵 Ventas Efectivo</span><strong id="corteEfectivo">$0.00</strong></div>
+        <div class="corte-fila"><span>💳 Ventas Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
+        <div class="corte-fila"><span>🏦 Ventas Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
+        <div class="corte-fila" style="font-weight:bold;"><span>Total Ventas Brutas</span><strong id="corteTotalVentas">$0.00</strong></div>
+        <div class="corte-fila gasto"><span>➖ Gastos del turno</span><strong id="corteTotalGastos">-$0.00</strong></div>
+        <div class="corte-fila gasto"><span>💵 Efectivo en Caja (Neto)</span><strong id="corteEfectivoNeto">$0.00</strong></div>
+        <div class="corte-fila total"><span>Total Neto a Entregar</span><span id="corteTotalNeto">$0.00</span></div>
         <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
         <button class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
     </div>
@@ -233,8 +298,8 @@ const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbz18IWzdxjJdH
 const SERVIDOR_SYNC = "http://192.168.100.5:3001";
 const socket = io(SERVIDOR_SYNC);
 
-// Contraseña para hacer el corte de caja
-const CLAVE_CORTE = "1234";
+// Contraseña para corte y gastos
+const CLAVE_AUTORIZACION = "1234";
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
 const SABORES_REFRESCO = ["Coca","Coca sin azúcar","Sidral Mundet rojo","Agua mineral","Sangría","Jarritos","Del Valle de mango", "Sidral"];
@@ -266,9 +331,9 @@ const PRODUCTOS = [
     { id: 217, cat: 'tortas', nombre: 'Gordita con Carne y Queso', precio: 55, esComida: true, llevaCarne: true },
     { id: 205, cat: 'tortas', nombre: 'Volcán de Chicharrón Norteño (3)', precio: 100, esComida: true, llevaCarne: false },
     { id: 206, cat: 'tortas', nombre: 'Volcán de Carnitas', precio: 45, esComida: true, llevaCarne: true },
-    { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false },
-    { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, esComida: true, llevaCarne: true },
-    { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, esComida: true, llevaCarne: false },
+    { id: 207, cat: 'tortas', nombre: 'Huarache Sencillo', precio: 35, esComida: true, llevaCarne: false, esHuarache: true },
+    { id: 208, cat: 'tortas', nombre: 'Huarache con Carne', precio: 70, esComida: true, llevaCarne: true, esHuarache: true },
+    { id: 209, cat: 'tortas', nombre: 'Huarache con Huevo', precio: 55, esComida: true, llevaCarne: false, esHuarache: true },
     { id: 210, cat: 'tortas', nombre: 'Plato Botanero', precio: 150, esComida: true, llevaCarne: true },
     { id: 211, cat: 'tortas', nombre: 'Gringa', precio: 75, esComida: true, llevaCarne: true },
     { id: 212, cat: 'tortas', nombre: 'Quesillo Extra', precio: 15, esComida: false, llevaCarne: false },
@@ -305,16 +370,32 @@ let personasMesas = JSON.parse(localStorage.getItem('personas_negrita') || '{}')
 let mesaActual = "Mesa 1";
 let productoSeleccionado = null;
 let productoRefresco = null;
+
+// Estados de personalización
 let opcionVerduraSeleccionada = "Con todo";
+let huaracheSalsaSeleccionada = "Salsa verde";
+let huaracheQuesoSeleccionado = "Con queso";
+let huaracheCebollaSeleccionada = "Con cebolla";
+
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
 let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
+let gastosTurno = JSON.parse(localStorage.getItem('gastos_turno_negrita') || '[]');
+let accionPendienteClave = null;
 
-// Sincronización Socket.IO en tiempo real
+// ---- Sincronización Socket.IO en tiempo real ----
 socket.on('estado_inicial', (db) => {
-    if (db && db.cuentas) {
-        cuentasMesas = Object.assign(cuentasMesas, db.cuentas);
-        personasMesas = Object.assign(personasMesas, db.personas || {});
+    if (db) {
+        if (db.cuentas) cuentasMesas = Object.assign(cuentasMesas, db.cuentas);
+        if (db.personas) personasMesas = Object.assign(personasMesas, db.personas);
+        if (db.ventasTurno) {
+            ventasTurno = db.ventasTurno;
+            guardarVentasTurno(false);
+        }
+        if (db.gastosTurno) {
+            gastosTurno = db.gastosTurno;
+            guardarGastosTurno(false);
+        }
         localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
         localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
         renderComanda();
@@ -327,9 +408,7 @@ socket.on('mesa_actualizada', (data) => {
         if (data.personas) personasMesas[data.mesa] = data.personas;
         localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
         localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
-        if (mesaActual === data.mesa) {
-            renderComanda();
-        }
+        if (mesaActual === data.mesa) renderComanda();
     }
 });
 
@@ -344,12 +423,141 @@ socket.on('personas_actualizadas', (data) => {
     }
 });
 
-function guardarVentasTurno() {
+socket.on('ventas_actualizadas', (data) => {
+    if (Array.isArray(data)) {
+        ventasTurno = data;
+        guardarVentasTurno(false);
+    }
+});
+
+socket.on('gastos_actualizados', (data) => {
+    if (Array.isArray(data)) {
+        gastosTurno = data;
+        guardarGastosTurno(false);
+        renderTablaGastos();
+    }
+});
+
+socket.on('corte_sincronizado', () => {
+    ventasTurno = [];
+    gastosTurno = [];
+    guardarVentasTurno(false);
+    guardarGastosTurno(false);
+    renderTablaGastos();
+});
+
+function guardarVentasTurno(emitir = true) {
     localStorage.setItem('ventas_turno_negrita', JSON.stringify(ventasTurno));
+    if (emitir) socket.emit('actualizar_ventas_turno', ventasTurno);
+}
+
+function guardarGastosTurno(emitir = true) {
+    localStorage.setItem('gastos_turno_negrita', JSON.stringify(gastosTurno));
+    if (emitir) socket.emit('actualizar_gastos_turno', gastosTurno);
 }
 
 function dinero(n) {
     return '$' + Number(n).toFixed(2);
+}
+
+// ---- Control de Acceso por Contraseña ----
+function abrirAccesoProtegido(tipo) {
+    accionPendienteClave = tipo;
+    document.getElementById("inputClave").value = "";
+    document.getElementById("claveError").style.display = "none";
+    if (tipo === 'gastos') {
+        document.getElementById("tituloModalClave").innerText = "🔒 Acceso a Gastos";
+        document.getElementById("subtituloModalClave").innerText = "Ingresa la contraseña para registrar o consultar gastos:";
+    } else {
+        document.getElementById("tituloModalClave").innerText = "🔒 Corte de Caja";
+        document.getElementById("subtituloModalClave").innerText = "Ingresa la contraseña para ver o realizar el corte:";
+    }
+    document.getElementById("modalClave").style.display = "flex";
+    setTimeout(() => document.getElementById("inputClave").focus(), 100);
+}
+
+function cerrarModalClave() {
+    document.getElementById("modalClave").style.display = "none";
+    document.getElementById("inputClave").value = "";
+    accionPendienteClave = null;
+}
+
+function validarClave() {
+    const ingresada = document.getElementById("inputClave").value;
+    if (ingresada === CLAVE_AUTORIZACION) {
+        const accion = accionPendienteClave;
+        cerrarModalClave();
+        if (accion === 'gastos') abrirModalGastos();
+        else if (accion === 'corte') abrirModalCorte();
+    } else {
+        document.getElementById("claveError").style.display = "block";
+        document.getElementById("inputClave").value = "";
+    }
+}
+
+// ---- Módulo de Gastos ----
+function abrirModalGastos() {
+    renderTablaGastos();
+    document.getElementById("gastoConcepto").value = "";
+    document.getElementById("gastoMonto").value = "";
+    document.getElementById("modalGastos").style.display = "flex";
+}
+
+function cerrarModalGastos() {
+    document.getElementById("modalGastos").style.display = "none";
+}
+
+function agregarGasto() {
+    const concepto = document.getElementById("gastoConcepto").value.trim();
+    const monto = parseFloat(document.getElementById("gastoMonto").value);
+    if (!concepto) {
+        alert("Escribe el concepto del gasto.");
+        return;
+    }
+    if (isNaN(monto) || monto <= 0) {
+        alert("Ingresa un monto válido mayor a 0.");
+        return;
+    }
+    const nuevo = {
+        id: Date.now() + Math.random(),
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        concepto,
+        monto: Number(monto.toFixed(2))
+    };
+    gastosTurno.push(nuevo);
+    guardarGastosTurno(true);
+    renderTablaGastos();
+    document.getElementById("gastoConcepto").value = "";
+    document.getElementById("gastoMonto").value = "";
+}
+
+function eliminarGasto(id) {
+    if (!confirm("¿Eliminar este gasto registrado?")) return;
+    gastosTurno = gastosTurno.filter(g => g.id !== id);
+    guardarGastosTurno(true);
+    renderTablaGastos();
+}
+
+function totalGastosCalculado() {
+    return gastosTurno.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0);
+}
+
+function renderTablaGastos() {
+    const tbody = document.getElementById("listaGastosBody");
+    if (!tbody) return;
+    if (gastosTurno.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#888;padding:12px;">No hay gastos registrados en este turno.</td></tr>`;
+    } else {
+        tbody.innerHTML = gastosTurno.map(g => `
+            <tr>
+                <td style="color:#666;">${g.hora}</td>
+                <td><strong>${g.concepto}</strong></td>
+                <td style="color:#c0392b;font-weight:bold;">${dinero(g.monto)}</td>
+                <td style="text-align:center;"><button type="button" class="btn-del-gasto" onclick="eliminarGasto(${g.id})">✖</button></td>
+            </tr>
+        `).join('');
+    }
+    document.getElementById("totalGastosVista").innerText = dinero(totalGastosCalculado());
 }
 
 // ---- Personas ----
@@ -440,41 +648,21 @@ function armarOrdenImpresion(items, formatoNombre, conSubtotal) {
     return out;
 }
 
-// ---- Corte de caja ----
+// ---- Corte de caja Global ----
 function resumenTurno() {
-    const r = { Efectivo: 0, Tarjeta: 0, Transferencia: 0, total: 0, ordenes: ventasTurno.length };
+    const r = { Efectivo: 0, Tarjeta: 0, Transferencia: 0, totalVentas: 0, ordenes: ventasTurno.length };
     ventasTurno.forEach(v => {
         const monto = parseFloat(v.total) || 0;
         const m = String(v.metodo || '').trim().toLowerCase();
         if (m === 'efectivo') r.Efectivo += monto;
         else if (m === 'tarjeta') r.Tarjeta += monto;
         else if (m === 'transferencia') r.Transferencia += monto;
-        r.total += monto;
+        r.totalVentas += monto;
     });
-    return r;
-}
-
-function pedirClaveCorte() {
-    document.getElementById("inputClave").value = "";
-    document.getElementById("claveError").style.display = "none";
-    document.getElementById("modalClave").style.display = "flex";
-    setTimeout(() => document.getElementById("inputClave").focus(), 100);
-}
-
-function cerrarModalClave() {
-    document.getElementById("modalClave").style.display = "none";
-    document.getElementById("inputClave").value = "";
-}
-
-function validarClave() {
-    const ingresada = document.getElementById("inputClave").value;
-    if (ingresada === CLAVE_CORTE) {
-        cerrarModalClave();
-        abrirModalCorte();
-    } else {
-        document.getElementById("claveError").style.display = "block";
-        document.getElementById("inputClave").value = "";
-    }
+    const gastosTotal = totalGastosCalculado();
+    const efectivoNeto = r.Efectivo - gastosTotal;
+    const totalNeto = r.totalVentas - gastosTotal;
+    return { ...r, gastosTotal, efectivoNeto, totalNeto };
 }
 
 function abrirModalCorte() {
@@ -482,16 +670,20 @@ function abrirModalCorte() {
     document.getElementById("corteEfectivo").innerText = dinero(r.Efectivo);
     document.getElementById("corteTarjeta").innerText = dinero(r.Tarjeta);
     document.getElementById("corteTransferencia").innerText = dinero(r.Transferencia);
-    document.getElementById("corteTotal").innerText = dinero(r.total);
+    document.getElementById("corteTotalVentas").innerText = dinero(r.totalVentas);
+    document.getElementById("corteTotalGastos").innerText = `-${dinero(r.gastosTotal)}`;
+    document.getElementById("corteEfectivoNeto").innerText = dinero(r.efectivoNeto);
+    document.getElementById("corteTotalNeto").innerText = dinero(r.totalNeto);
+
     document.getElementById("corteSubtitulo").innerText = r.ordenes === 0
-        ? "Aún no hay ventas desde el último corte."
-        : `${r.ordenes} orden(es) desde ${ventasTurno[0].fecha}`;
+        ? "No hay ventas registradas en ningún dispositivo desde el último corte."
+        : `${r.ordenes} orden(es) acumuladas de todos los dispositivos.`;
 
     const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m] && cuentasMesas[m].length > 0);
     const aviso = document.getElementById("corteAviso");
     if (abiertas.length > 0) {
         aviso.style.display = "block";
-        aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en el corte.";
+        aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en este corte.";
     } else {
         aviso.style.display = "none";
     }
@@ -503,23 +695,27 @@ function cerrarModalCorte() {
 }
 
 function confirmarCorte() {
-    if (ventasTurno.length === 0) {
-        alert("No hay ventas que cortar.");
+    if (ventasTurno.length === 0 && gastosTurno.length === 0) {
+        alert("No hay ventas ni gastos registrados que cortar.");
         return;
     }
-    if (!confirm("¿Hacer el corte de caja? Los contadores volverán a $0.00.")) return;
+    if (!confirm("¿Hacer el corte de caja general? Se reiniciarán las ventas y gastos en todos los dispositivos.")) return;
 
     const r = resumenTurno();
     const payload = {
         tipo: "CORTE",
         fecha: new Date().toLocaleString('es-MX'),
         ordenes: r.ordenes,
-        primerFolio: ventasTurno[0].folio,
-        ultimoFolio: ventasTurno[ventasTurno.length - 1].folio,
-        efectivo: r.Efectivo,
+        primerFolio: ventasTurno.length ? ventasTurno[0].folio : "N/A",
+        ultimoFolio: ventasTurno.length ? ventasTurno[ventasTurno.length - 1].folio : "N/A",
+        efectivoBruto: r.Efectivo,
         tarjeta: r.Tarjeta,
         transferencia: r.Transferencia,
-        total: r.total
+        totalVentasBrutas: r.totalVentas,
+        totalGastos: r.gastosTotal,
+        efectivoNetoCaja: r.efectivoNeto,
+        totalNetoEntregar: r.totalNeto,
+        detalleGastos: gastosTurno
     };
 
     fetch(URL_GOOGLE_SHEETS, {
@@ -529,12 +725,15 @@ function confirmarCorte() {
         body: JSON.stringify(payload)
     }).then(() => {
         ventasTurno = [];
-        guardarVentasTurno();
+        gastosTurno = [];
+        guardarVentasTurno(false);
+        guardarGastosTurno(false);
+        socket.emit('corte_realizado');
         cerrarModalCorte();
-        alert(`Corte guardado.\nEfectivo: ${dinero(r.Efectivo)}\nTarjeta: ${dinero(r.Tarjeta)}\nTransferencia: ${dinero(r.Transferencia)}\nTotal: ${dinero(r.total)}`);
+        alert(`Corte guardado en Sheets.\nVentas: ${dinero(r.totalVentas)}\nGastos: -${dinero(r.gastosTotal)}\nEfectivo en caja: ${dinero(r.efectivoNeto)}\nTotal Neto: ${dinero(r.totalNeto)}`);
     }).catch(err => {
         console.error("Error al guardar corte:", err);
-        alert("No se pudo guardar el corte (sin conexión). Inténtalo de nuevo; tus ventas siguen guardadas.");
+        alert("Error de conexión con Sheets. Las ventas y gastos continúan guardados; inténtalo nuevamente.");
     });
 }
 
@@ -603,6 +802,8 @@ function elegirRefresco(indice) {
 // ---- Opciones de comida ----
 function abrirModalOpciones(prod) {
     document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${infoPersonas().actual}`;
+    
+    // Sección Kilo
     const secPeso = document.getElementById("seccionPeso");
     if (prod.esPorKilo) {
         secPeso.style.display = "block";
@@ -610,6 +811,8 @@ function abrirModalOpciones(prod) {
     } else {
         secPeso.style.display = "none";
     }
+
+    // Sección Carnes
     const secCarnes = document.getElementById("seccionCarnes");
     const container = document.getElementById("carnesContainer");
     if (prod.llevaCarne) {
@@ -623,7 +826,23 @@ function abrirModalOpciones(prod) {
         secCarnes.style.display = "none";
         container.innerHTML = "";
     }
-    setVerdura('Con todo');
+
+    // Alternar entre Opciones de Huarache o Verdura General
+    const secHuarache = document.getElementById("seccionHuarache");
+    const secVerduraGeneral = document.getElementById("seccionVerduraGeneral");
+
+    if (prod.esHuarache) {
+        secHuarache.style.display = "block";
+        secVerduraGeneral.style.display = "none";
+        setHuaracheSalsa('Salsa verde');
+        setHuaracheQueso('Con queso');
+        setHuaracheCebolla('Con cebolla');
+    } else {
+        secHuarache.style.display = "none";
+        secVerduraGeneral.style.display = "block";
+        setVerdura('Con todo');
+    }
+
     document.getElementById("notaExtra").value = "";
     document.getElementById("modalOpciones").style.display = "flex";
 }
@@ -644,18 +863,72 @@ function setPeso(kilos, etiqueta, precio, e = null) {
     }
 }
 
+// Verdura general
 function setVerdura(tipo) {
     opcionVerduraSeleccionada = tipo;
-    document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#seccionVerduraGeneral .btn-verdura').forEach(b => b.classList.remove('active'));
     const ids = {
         'Con todo': 'vTodo',
-        'Sin cebolla': 'vSinCeb',
-        'Sin cilantro': 'vSinCil',
-        'Solo verdura': 'vSoloVerd',
-        'Solo': 'vSolo'
+        'Solos': 'vSolos',
+        'Verdura': 'vVerdura',
+        'Puro cilantro': 'vPuroCil',
+        'Pura cebolla': 'vPuraCeb'
     };
     if (ids[tipo]) {
         const el = document.getElementById(ids[tipo]);
+        if (el) el.classList.add('active');
+    }
+}
+
+// Opciones de huarache: Salsa
+function setHuaracheSalsa(salsa) {
+    huaracheSalsaSeleccionada = salsa;
+    const mapa = {
+        'Salsa verde': 'hSalsaVerde',
+        'Salsa roja': 'hSalsaRoja',
+        'Salsa verde y roja': 'hSalsaAmbas',
+        'Sin salsa': 'hSinSalsa'
+    };
+    ['hSalsaVerde', 'hSalsaRoja', 'hSalsaAmbas', 'hSinSalsa'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    if (mapa[salsa]) {
+        const el = document.getElementById(mapa[salsa]);
+        if (el) el.classList.add('active');
+    }
+}
+
+// Opciones de huarache: Queso
+function setHuaracheQueso(queso) {
+    huaracheQuesoSeleccionado = queso;
+    const mapa = {
+        'Con queso': 'hConQueso',
+        'Sin queso': 'hSinQueso'
+    };
+    ['hConQueso', 'hSinQueso'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    if (mapa[queso]) {
+        const el = document.getElementById(mapa[queso]);
+        if (el) el.classList.add('active');
+    }
+}
+
+// Opciones de huarache: Cebolla
+function setHuaracheCebolla(cebolla) {
+    huaracheCebollaSeleccionada = cebolla;
+    const mapa = {
+        'Con cebolla': 'hConCebolla',
+        'Sin cebolla': 'hSinCebolla'
+    };
+    ['hConCebolla', 'hSinCebolla'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    if (mapa[cebolla]) {
+        const el = document.getElementById(mapa[cebolla]);
         if (el) el.classList.add('active');
     }
 }
@@ -676,7 +949,14 @@ function confirmarAgregarConOpciones() {
         else if (checks.length > 1) detalle.push("Combinado: " + checks.join('/'));
         else detalle.push("Surtido");
     }
-    detalle.push(opcionVerduraSeleccionada);
+
+    if (productoSeleccionado.esHuarache) {
+        detalle.push(huaracheSalsaSeleccionada);
+        detalle.push(huaracheQuesoSeleccionado);
+        detalle.push(huaracheCebollaSeleccionada);
+    } else {
+        detalle.push(opcionVerduraSeleccionada);
+    }
 
     const notaExtra = document.getElementById("notaExtra").value.trim();
     if (notaExtra) detalle.push(`(${notaExtra})`);
@@ -827,7 +1107,6 @@ async function procesarPago(metodoPago) {
     const cuenta = obtenerMesaActual();
     if (!cuenta || cuenta.length === 0) return;
 
-    // Suma exacta del total de la cuenta
     const total = cuenta.reduce((acc, i) => acc + (Number(i.cant) * Number(i.precio)), 0);
     const fechaHora = new Date().toLocaleString('es-MX');
     const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
@@ -855,7 +1134,7 @@ async function procesarPago(metodoPago) {
         console.warn("Error enviando a impresora:", e);
     }
 
-    // 2. Guardar en Google Sheets con el total de la cuenta incluido
+    // 2. Guardar en Google Sheets
     if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
         const payloadVenta = {
             tipo: "VENTA",
@@ -889,20 +1168,20 @@ async function procesarPago(metodoPago) {
         }
     }
 
-    // 3. Registrar venta en turno para corte de caja
+    // 3. Registrar venta en turno y sincronizarla con todos los dispositivos
     ventasTurno.push({ 
         folio: ordenFolio, 
         fecha: fechaHora, 
         metodo: metodoPago, 
         total: Number(total.toFixed(2)) 
     });
-    guardarVentasTurno();
+    guardarVentasTurno(true);
 
     // 4. Incrementar folio
     numeroOrdenActual++;
     localStorage.setItem('num_orden_negrita', numeroOrdenActual);
 
-    // 5. Vaciar mesa, sincronizar servidor y re-renderizar interfaz
+    // 5. Vaciar mesa, sincronizar servidor y re-renderizar
     cuentasMesas[mesaActual] = [];
     localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
     reiniciarPersonas(mesaActual);
@@ -971,7 +1250,7 @@ function ajustarEspacioInferior() {
         localStorage.setItem('altura_comanda_negrita', ALTURA_LISTA_DEFECTO);
     });
 
-    new ResizeObserver(ajustarEspacioInferior).observe(panelEl);
+    new ResizeObserver(adjust => ajustarEspacioInferior()).observe(panelEl);
     window.addEventListener('resize', () => aplicarAlturaLista(listaEl.offsetHeight));
 })();
 
