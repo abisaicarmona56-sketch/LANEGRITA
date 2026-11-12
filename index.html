@@ -25,11 +25,16 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 .categorias-bar::-webkit-scrollbar{display:none}
 .btn-tab{padding:8px 14px;border-radius:20px;border:1px solid var(--c2);background:#fff;color:var(--c3);font-size:.88rem;font-weight:600;cursor:pointer}
 .btn-tab.active{background:var(--c2);color:#fff}
+.btn-tab.promo-tab{border-color:#d35400;color:#d35400}
+.btn-tab.promo-tab.active{background:#d35400;color:#fff}
 .menu-grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}
 .card-prod{background:#fff;padding:12px;border-radius:10px;border:1px solid var(--border);border-left:4px solid var(--c1);display:flex;flex-direction:column;justify-content:space-between;min-height:95px;box-shadow:0 2px 4px rgba(3,44,28,.05);cursor:pointer}
+.card-prod.promo-card{border-left:4px solid #e67e22;background:#fffaf5}
 .card-prod:active{background:#e8f4f1;transform:scale(.98)}
 .prod-nombre{font-weight:bold;font-size:.95rem;margin-bottom:4px;color:var(--c4)}
+.prod-sub{font-size:.75rem;color:#666;margin-bottom:4px}
 .prod-precio{font-weight:700;color:var(--c2);font-size:1rem}
+.card-prod.promo-card .prod-precio{color:#d35400}
 .comanda-panel{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--c2);padding:12px 16px;z-index:150;box-shadow:0 -4px 15px rgba(0,14,0,.12)}
 .resize-handle{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 10px;margin:-12px -16px 4px;cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none}
 .resize-handle span{width:56px;height:5px;border-radius:3px;background:#b9c9c4}
@@ -56,8 +61,8 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 .peso-grid,.refrescos-grid,.opciones-verdura{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
 .btn-peso{padding:10px;border-radius:8px;border:1px solid var(--border);background:#f8faf9;font-size:.9rem;font-weight:600;cursor:pointer}
 .btn-peso.active{background:var(--c2);color:#fff;border-color:var(--c2)}
-.btn-refresco{padding:14px 8px;border-radius:8px;border:1px solid var(--c2);background:#f0f7f5;font-size:.92rem;font-weight:600;color:var(--c3);cursor:pointer;text-align:center}
-.btn-refresco:active{background:var(--c1);color:#fff}
+.btn-refresco{padding:12px 8px;border-radius:8px;border:1px solid var(--c2);background:#f0f7f5;font-size:.88rem;font-weight:600;color:var(--c3);cursor:pointer;text-align:center}
+.btn-refresco:active,.btn-refresco.active{background:var(--c1);color:#fff;border-color:var(--c1)}
 .carnes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .check-btn{display:flex;align-items:center;gap:6px;background:#f2f7f5;padding:10px;border-radius:8px;font-size:.9rem;cursor:pointer;border:1px solid var(--border);color:var(--c4)}
 .check-btn input{accent-color:var(--c1);transform:scale(1.2)}
@@ -116,6 +121,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
     <button class="btn-tab" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
     <button class="btn-tab" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
     <button class="btn-tab" onclick="filtrarCategoria('postres', event)">Postres</button>
+    <button class="btn-tab promo-tab" onclick="filtrarCategoria('promos', event)">🔥 Promos</button>
 </div>
 
 <div class="menu-grid" id="menuGrid"></div>
@@ -137,7 +143,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
     </div>
 </div>
 
-<!-- Modal de Personalización -->
+<!-- Modal de Personalización (Comida y Promociones) -->
 <div class="modal" id="modalOpciones">
     <div class="modal-content">
         <div class="modal-top-bar">
@@ -167,12 +173,16 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
                 <button type="button" class="btn-verdura" id="vSolo" onclick="setVerdura('Solo')">Solo</button>
             </div>
         </div>
+        <div id="seccionRefrescoPromo" style="display:none;">
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:#d35400;">🥤 Elige el refresco incluido en la promo:</p>
+            <div class="refrescos-grid" id="refrescosPromoContainer"></div>
+        </div>
         <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:.9rem;">
         <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
     </div>
 </div>
 
-<!-- Modal de Refrescos -->
+<!-- Modal de Refrescos individuales -->
 <div class="modal" id="modalRefresco">
     <div class="modal-content">
         <div class="modal-top-bar">
@@ -259,7 +269,6 @@ const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbz18IWzdxjJdH
 const SERVIDOR_SYNC = "http://192.168.100.5:3001";
 const socket = io(SERVIDOR_SYNC);
 
-// Contraseña para Corte de Caja y Registro de Gastos
 const CLAVE_CORTE = "1234";
 let destinoClave = "corte";
 
@@ -319,7 +328,11 @@ const PRODUCTOS = [
     { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
     { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
     { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
-    { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false }
+    { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false },
+    // Promociones
+    { id: 601, cat: 'promos', nombre: 'Promo: Orden Tacos + Refresco', sub: 'Lunes y Martes', precio: 110, esComida: true, llevaCarne: true, llevaRefresco: true, esPromo: true },
+    { id: 602, cat: 'promos', nombre: 'Promo: Torta + Refresco', sub: 'Miércoles y Jueves', precio: 75, esComida: true, llevaCarne: true, llevaRefresco: true, esPromo: true },
+    { id: 603, cat: 'promos', nombre: 'Promo: Torta Especial + Refresco', sub: 'Miércoles y Jueves', precio: 115, esComida: true, llevaCarne: false, llevaRefresco: true, esPromo: true }
 ];
 
 let cuentasMesas = {
@@ -333,6 +346,7 @@ let mesaActual = "Mesa 1";
 let productoSeleccionado = null;
 let productoRefresco = null;
 let opcionVerduraSeleccionada = "Con todo";
+let refrescoPromoSeleccionado = "Coca";
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
 let ventasTurno = JSON.parse(localStorage.getItem('ventas_turno_negrita') || '[]');
@@ -680,8 +694,11 @@ function filtrarCategoria(categoria, e = null) {
         if (b) b.classList.add('active');
     }
     document.getElementById("menuGrid").innerHTML = PRODUCTOS.filter(p => p.cat === categoria).map(p => `
-        <div class="card-prod" onclick="iniciarAgregar(${p.id})">
-            <div class="prod-nombre">${p.nombre}</div>
+        <div class="card-prod ${p.esPromo ? 'promo-card' : ''}" onclick="iniciarAgregar(${p.id})">
+            <div>
+                <div class="prod-nombre">${p.nombre}</div>
+                ${p.sub ? `<div class="prod-sub">${p.sub}</div>` : ''}
+            </div>
             <div class="prod-precio">$${p.precio}</div>
         </div>`).join('');
 }
@@ -718,7 +735,7 @@ function elegirRefresco(indice) {
     cerrarModalRefresco();
 }
 
-// ---- Opciones de comida ----
+// ---- Opciones de comida y promociones ----
 function abrirModalOpciones(prod) {
     document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${infoPersonas().actual}`;
     const secPeso = document.getElementById("seccionPeso");
@@ -741,9 +758,29 @@ function abrirModalOpciones(prod) {
         secCarnes.style.display = "none";
         container.innerHTML = "";
     }
+
+    const secRefrescoPromo = document.getElementById("seccionRefrescoPromo");
+    const refContainer = document.getElementById("refrescosPromoContainer");
+    if (prod.llevaRefresco) {
+        secRefrescoPromo.style.display = "block";
+        refrescoPromoSeleccionado = SABORES_REFRESCO[0];
+        refContainer.innerHTML = SABORES_REFRESCO.map((s, idx) =>
+            `<button type="button" class="btn-refresco ${idx === 0 ? 'active' : ''}" onclick="setRefrescoPromo('${s}', event)">${s}</button>`
+        ).join('');
+    } else {
+        secRefrescoPromo.style.display = "none";
+        refContainer.innerHTML = "";
+    }
+
     setVerdura('Con todo');
     document.getElementById("notaExtra").value = "";
     document.getElementById("modalOpciones").style.display = "flex";
+}
+
+function setRefrescoPromo(sabor, e) {
+    refrescoPromoSeleccionado = sabor;
+    document.querySelectorAll('#refrescosPromoContainer .btn-refresco').forEach(b => b.classList.remove('active'));
+    if (e && e.target) e.target.classList.add('active');
 }
 
 function cerrarModalOpciones() {
@@ -795,6 +832,10 @@ function confirmarAgregarConOpciones() {
         else detalle.push("Surtido");
     }
     detalle.push(opcionVerduraSeleccionada);
+
+    if (productoSeleccionado.llevaRefresco) {
+        detalle.push(`Refresco: ${refrescoPromoSeleccionado}`);
+    }
 
     const notaExtra = document.getElementById("notaExtra").value.trim();
     if (notaExtra) detalle.push(`(${notaExtra})`);
