@@ -129,8 +129,8 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
     <div class="lista-articulos" id="listaArticulos"></div>
     <div class="acciones-bar">
         <button class="btn-limpiar" onclick="cerrarMesa()">Liberar</button>
-        <button class="btn-cuenta" onclick="abrirModalCobro()">💳 Cobrar / Cuenta</button>
-        <button class="btn-comanda" onclick="mandarComanda()">🔥 Mandar Comanda</button>
+        <button class="btn-cuenta" onclick="abrirModalCobro()">Cobrar / Cuenta</button>
+        <button class="btn-comanda" onclick="mandarComanda()">Mandar Comanda</button>
     </div>
 </div>
 
@@ -191,9 +191,9 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <div style="font-size:2rem;font-weight:800;text-align:center;color:var(--c2);margin-bottom:15px;" id="totalModalCobro">$0.00</div>
         <p style="font-size:.9rem;text-align:center;color:#555;">Selecciona el método de pago del cliente:</p>
         <div class="metodos-pago">
-            <button class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
-            <button class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
-            <button class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
+            <button class="btn-metodo" onclick="procesarPago('Efectivo')">Efectivo</button>
+            <button class="btn-metodo" onclick="procesarPago('Tarjeta')">Tarjeta</button>
+            <button class="btn-metodo" onclick="procesarPago('Transferencia')">Transferencia</button>
         </div>
     </div>
 </div>
@@ -202,7 +202,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 <div class="modal" id="modalGasto">
     <div class="modal-content">
         <div class="modal-top-bar">
-            <div class="modal-header">💸 Registrar Gasto</div>
+            <div class="modal-header">Registrar Gasto</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalGasto()">✖</button>
         </div>
         <p style="font-size:.85rem;color:#555;margin-bottom:4px;">Concepto (ej. Tortillas, Cilantro, Gas, Hielo):</p>
@@ -219,7 +219,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 <div class="modal" id="modalClave">
     <div class="modal-content">
         <div class="modal-top-bar">
-            <div class="modal-header">🔒 Contraseña</div>
+            <div class="modal-header">Contraseña</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalClave()">✖</button>
         </div>
         <p style="font-size:.9rem;color:#555;">Ingresa la contraseña para hacer el corte de caja:</p>
@@ -237,12 +237,12 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
             <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
         </div>
         <p id="corteSubtitulo" style="font-size:.85rem;color:#555;margin-bottom:8px;"></p>
-        <div class="corte-fila"><span>💵 Efectivo ventas</span><strong id="corteEfectivo">$0.00</strong></div>
-        <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
-        <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
-        <div class="corte-fila"><span>📈 Total vendido</span><strong id="corteTotal">$0.00</strong></div>
-        <div class="corte-fila gasto"><span>💸 Gastos del turno</span><strong id="corteGastos">-$0.00</strong></div>
-        <div class="corte-fila"><span>💰 Efectivo neto en caja</span><strong id="corteEfectivoNeto">$0.00</strong></div>
+        <div class="corte-fila"><span>Efectivo ventas</span><strong id="corteEfectivo">$0.00</strong></div>
+        <div class="corte-fila"><span>Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
+        <div class="corte-fila"><span>Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
+        <div class="corte-fila"><span>Total vendido</span><strong id="corteTotal">$0.00</strong></div>
+        <div class="corte-fila gasto"><span>Gastos del turno</span><strong id="corteGastos">-$0.00</strong></div>
+        <div class="corte-fila"><span>Efectivo neto en caja</span><strong id="corteEfectivoNeto">$0.00</strong></div>
         <div class="corte-fila total"><span>Balance final</span><span id="corteBalanceFinal">$0.00</span></div>
         <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
         <button class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
@@ -251,12 +251,12 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 
 <script>
 const SERVIDOR_IMPRESION = "http://192.168.100.5:8080/imprimir";
-const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbz18IWzdxjJdH5KUGGgqrW0Jeiu-mdTSDQ2Bauc4ZPga6FFtLE0Td5R9yZhOkj-6zmK7w/exec";
+const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbw0A4vYgqBRIwIPWGVd2iA-Q7lPN4sRHXD4vnjJBFtMulDjvSP3kbXvd_qBo5LFjQa8Yw/exec";
 
 const SERVIDOR_SYNC = "http://192.168.100.5:3001";
 const socket = io(SERVIDOR_SYNC);
 
-const CLAVE_CORTE = "1234";
+const CLAVE_CORTE = "1821";
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
 const SABORES_REFRESCO = ["Coca","Coca sin azúcar","Sidral Mundet rojo","Agua mineral","Sangría","Jarritos","Del Valle de mango", "Sidral"];
