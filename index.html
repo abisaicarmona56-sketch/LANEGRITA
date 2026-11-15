@@ -5,12 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>POS Taquería La Negrita</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>if (typeof io === 'undefined') document.write('<script src="http://192.168.100.5:3001/socket.io/socket.io.js"><\/script>');</script>
 <style>
 :root{--c1:#0B8770;--c2:#086954;--c3:#064B38;--c4:#032C1C;--c5:#000E00;--bg:#f2f5f4;--border:#d2deda}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--c5);padding-bottom:300px}
-header{background:linear-gradient(135deg,var(--c3),var(--c4));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,14,0,.3);gap:8px}
-header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
+header{background:linear-gradient(135deg,var(--c3),var(--c4));color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,14,0,.3);gap:8px;flex-wrap:wrap}
+header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.sync-pill{font-size:.72rem;padding:4px 9px;border-radius:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.15);color:#fff;white-space:nowrap;transition:transform .1s}
+.sync-pill:active{transform:scale(.96)}
+.sync-pill.pendiente{background:#f39c12;color:#1a1000;border-color:#f8c471}
+.sync-pill.error{background:#c0392b;color:#fff;border-color:#f1948a}
+.storage-banner{display:none;background:#c0392b;color:#fff;text-align:center;font-size:.8rem;padding:6px 10px;font-weight:700}
 .header-btns{display:flex;gap:6px;align-items:center}
 .mesa-selector{background:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
 .mesa-selector select{flex:1;padding:10px;border-radius:8px;border:1px solid var(--c2);font-size:1rem;font-weight:600;background:#fff;color:var(--c4)}
@@ -39,14 +45,19 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 .resize-handle{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 10px;margin:-12px -16px 4px;cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none}
 .resize-handle span{width:56px;height:5px;border-radius:3px;background:#b9c9c4}
 .resize-handle small{font-size:.65rem;color:#789088}
-.totales-row{display:flex;justify-content:space-between;font-weight:bold;font-size:1.05rem;margin-bottom:8px;color:var(--c4)}
+.totales-row{display:flex;justify-content:space-between;font-weight:bold;font-size:1.02rem;margin-bottom:8px;color:var(--c4)}
 .lista-articulos{max-height:170px;overflow-y:auto;border-bottom:1px solid var(--border);margin-bottom:10px;padding-bottom:5px}
 .persona-grupo-header{display:flex;justify-content:space-between;align-items:center;background:#e1ebe7;color:var(--c3);font-weight:800;font-size:.85rem;padding:5px 8px;border-radius:6px;margin-top:6px}
 .persona-grupo-header.activa{background:var(--c3);color:#fff}
-.item-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #e0ece8;font-size:.9rem;gap:6px}
-.item-row.impreso{color:#7b948d}
-.item-row.impreso .item-nombre{text-decoration:line-through;opacity:.85}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:5px 4px;border-bottom:1px dashed #e0ece8;font-size:.9rem;gap:6px;border-radius:4px}
+.item-row.en-cocina{color:#2e6b5e}
+.item-row.entregado{color:#7b948d;background:#f3f7f5}
+.item-row.entregado .item-nombre{text-decoration:line-through;opacity:.85}
+.tag-estado{display:inline-block;font-size:.7rem;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px}
+.tag-entregado{background:#d4efdf;color:#1e8449}
+.tag-cocina{background:#d1f2eb;color:#0e6251}
 .btn-qty{width:26px;height:26px;border-radius:50%;border:1px solid var(--c2);background:#f0f7f5;color:var(--c3);font-size:1rem;font-weight:bold;cursor:pointer}
+.btn-del-item{width:26px;height:26px;border-radius:50%;border:1px solid #e6b0aa;background:#fdedec;color:#c0392b;font-size:.85rem;font-weight:bold;cursor:pointer}
 .acciones-bar{display:flex;gap:6px}
 .btn-comanda{flex:1.7;background:var(--c1);color:#fff;border:none;padding:12px 6px;border-radius:8px;font-weight:bold;font-size:.85rem;cursor:pointer}
 .btn-cuenta{flex:1.3;background:var(--c3);color:#fff;border:none;padding:12px 6px;border-radius:8px;font-weight:bold;font-size:.85rem;cursor:pointer}
@@ -73,21 +84,26 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 .metodos-pago{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}
 .btn-metodo{flex:1 1 100px;padding:16px 6px;border-radius:10px;border:2px solid var(--c1);background:#f0f7f5;font-size:.95rem;font-weight:bold;color:var(--c3);cursor:pointer;text-align:center}
 .btn-metodo:active{background:var(--c1);color:#fff}
+.btn-metodo:disabled{opacity:.5;cursor:not-allowed}
 .btn-header-corte{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:7px 10px;font-size:.8rem;font-weight:bold;cursor:pointer;white-space:nowrap}
 .btn-header-gasto{background:rgba(231,76,60,.25);color:#fff;border:1px solid rgba(255,180,170,.6);border-radius:8px;padding:7px 10px;font-size:.8rem;font-weight:bold;cursor:pointer;white-space:nowrap}
-.corte-fila{display:flex;justify-content:space-between;padding:10px 4px;border-bottom:1px dashed var(--border);font-size:1rem;color:var(--c4)}
+.corte-fila{display:flex;justify-content:space-between;padding:9px 4px;border-bottom:1px dashed var(--border);font-size:.95rem;color:var(--c4)}
 .corte-fila.gasto{color:#c0392b}
-.corte-fila.total{border-bottom:none;border-top:2px solid var(--c2);font-weight:800;font-size:1.2rem;color:var(--c2);margin-top:4px}
+.corte-fila.total{border-bottom:none;border-top:2px solid var(--c2);font-weight:800;font-size:1.15rem;color:var(--c2);margin-top:4px}
 .corte-aviso{background:#fff6e0;border:1px solid #f0c860;color:#7a5a00;border-radius:8px;padding:10px;font-size:.85rem;margin:12px 0 0}
+.corte-bloqueo{background:#fdedec;border:1px solid #e6b0aa;color:#922b21;border-radius:8px;padding:10px;font-size:.85rem;margin:12px 0 0;font-weight:600}
 .input-clave{width:100%;padding:12px;border:1px solid var(--c2);border-radius:8px;font-size:1.05rem;margin:8px 0}
 .lista-gastos-turno{max-height:140px;overflow-y:auto;margin-top:12px;border-top:1px solid var(--border);padding-top:8px;font-size:.85rem}
-.gasto-item{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #e0ece8;color:#444}
+.gasto-item{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #e0ece8;color:#444;gap:8px}
 </style>
 </head>
 <body>
 
+<div id="storageBanner" class="storage-banner">⚠️ Almacenamiento local lleno o bloqueado (modo incógnito). Los datos podrían no guardarse al cerrar Chrome.</div>
+
 <header>
-    <h1>🌮 La Negrita</h1>
+    <h1>🌮 La Negrita <span id="wsBadge" style="font-size:.7rem;opacity:.85;">●</span></h1>
+    <button type="button" id="syncStatusPill" class="sync-pill" onclick="forzarSincronizacionCola()" title="Toca para sincronizar ahora">✅ Todo sincronizado</button>
     <div class="header-btns">
         <button type="button" class="btn-header-gasto" onclick="pedirClave('gasto')">💸 Gastos</button>
         <button type="button" class="btn-header-corte" onclick="pedirClave('corte')">🧾 Corte</button>
@@ -117,12 +133,12 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 <div class="personas-bar" id="personasBar"></div>
 
 <div class="categorias-bar">
-    <button class="btn-tab active" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
-    <button class="btn-tab" onclick="filtrarCategoria('tortas', event)">Tortas y Antojitos</button>
-    <button class="btn-tab" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
-    <button class="btn-tab" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
-    <button class="btn-tab" onclick="filtrarCategoria('postres', event)">Postres</button>
-    <button class="btn-tab promo-tab" onclick="filtrarCategoria('promos', event)">🔥 Promos</button>
+    <button class="btn-tab active" data-cat="tacos" onclick="filtrarCategoria('tacos', event)">Tacos y Carnitas</button>
+    <button class="btn-tab" data-cat="tortas" onclick="filtrarCategoria('tortas', event)">Tortas y Antojitos</button>
+    <button class="btn-tab" data-cat="quesadillas" onclick="filtrarCategoria('quesadillas', event)">Quesadillas</button>
+    <button class="btn-tab" data-cat="bebidas" onclick="filtrarCategoria('bebidas', event)">Bebidas</button>
+    <button class="btn-tab" data-cat="postres" onclick="filtrarCategoria('postres', event)">Postres</button>
+    <button class="btn-tab promo-tab" data-cat="promos" onclick="filtrarCategoria('promos', event)">🔥 Promos</button>
 </div>
 
 <div class="menu-grid" id="menuGrid"></div>
@@ -132,7 +148,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <span></span><small>↕ arrastra para ajustar</small>
     </div>
     <div class="totales-row">
-        <span id="cantPendiente">0 por mandar</span>
+        <span id="cantPendiente">0 por mandar · 0 por entregar</span>
         <span id="montoTotalMesa">Total: $0.00</span>
     </div>
     <div class="lista-articulos" id="listaArticulos"></div>
@@ -201,12 +217,12 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         </div>
 
         <div id="seccionRefrescoPromo" style="display:none;">
-            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:#d35400;">🥤 Elige el refresco incluido en la promo:</p>
+            <p style="font-size:.85rem;font-weight:bold;margin-bottom:6px;color:#d35400;">🥤 Elige el refresco incluido en la promo (obligatorio):</p>
             <div class="refrescos-grid" id="refrescosPromoContainer"></div>
         </div>
 
         <input type="text" id="notaExtra" placeholder="Nota extra (ej: dorado, poca grasa)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:.9rem;">
-        <button class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
+        <button type="button" id="btnConfirmarOpciones" class="modal-btn-confirm" onclick="confirmarAgregarConOpciones()">Agregar a la orden</button>
     </div>
 </div>
 
@@ -232,9 +248,9 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <div style="font-size:2rem;font-weight:800;text-align:center;color:var(--c2);margin-bottom:15px;" id="totalModalCobro">$0.00</div>
         <p style="font-size:.9rem;text-align:center;color:#555;">Selecciona el método de pago del cliente:</p>
         <div class="metodos-pago">
-            <button class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
-            <button class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
-            <button class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
+            <button type="button" class="btn-metodo" onclick="procesarPago('Efectivo')">💵 Efectivo</button>
+            <button type="button" class="btn-metodo" onclick="procesarPago('Tarjeta')">💳 Tarjeta</button>
+            <button type="button" class="btn-metodo" onclick="procesarPago('Transferencia')">🏦 Transferencia</button>
         </div>
     </div>
 </div>
@@ -250,8 +266,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <input type="text" id="gastoConcepto" class="input-clave" placeholder="Descripción del gasto">
         <p style="font-size:.85rem;color:#555;margin-bottom:4px;margin-top:6px;">Monto ($):</p>
         <input type="number" id="gastoMonto" class="input-clave" placeholder="0.00" step="0.01" min="0">
-        <button class="modal-btn-confirm" style="margin-top:8px;" onclick="guardarGasto()">Guardar gasto en Excel</button>
-        
+        <button type="button" id="btnGuardarGasto" class="modal-btn-confirm" style="margin-top:8px;" onclick="guardarGasto()">Guardar gasto</button>
         <div class="lista-gastos-turno" id="listaGastosTurno"></div>
     </div>
 </div>
@@ -266,7 +281,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <p id="claveTexto" style="font-size:.9rem;color:#555;">Ingresa la contraseña:</p>
         <input type="password" id="inputClave" class="input-clave" style="text-align:center;" placeholder="Contraseña" autocomplete="off" onkeydown="if(event.key==='Enter')validarClave()">
         <p id="claveError" style="color:#c0392b;font-size:.85rem;display:none;text-align:center;margin-bottom:8px;">Contraseña incorrecta</p>
-        <button class="modal-btn-confirm" onclick="validarClave()">Entrar</button>
+        <button type="button" class="modal-btn-confirm" onclick="validarClave()">Entrar</button>
     </div>
 </div>
 
@@ -286,23 +301,29 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
         <div class="corte-fila"><span>💰 Efectivo neto en caja</span><strong id="corteEfectivoNeto">$0.00</strong></div>
         <div class="corte-fila total"><span>Balance final</span><span id="corteBalanceFinal">$0.00</span></div>
         <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
-        <button id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
+        <div id="corteBloqueo" class="corte-bloqueo" style="display:none;"></div>
+        <button type="button" id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
     </div>
 </div>
 
 <script>
+// ==================== CONFIGURACIÓN PRINCIPAL ====================
 const SERVIDOR_IMPRESION = "http://192.168.100.5:8080/imprimir";
 const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyx-V-fqzqivhswyPp9DSdSQ2eCmHzb_OpAi_wm4_eu8DuMATL4afLgdeAdnlnvpXe5PQ/exec";
-
 const SERVIDOR_SYNC = "http://192.168.100.5:3001";
-const socket = io(SERVIDOR_SYNC);
-
 const CLAVE_CORTE = "1234";
-let destinoClave = "corte";
-let corteGlobalActual = null;
+const API_TOKEN_SHEETS = "NEGRITA_POS_2026_SECURE_KEY"; // Debe coincidir exactamente con Google Apps Script
+const FETCH_TIMEOUT_MS = 15000;
+const INTERVALO_REINTENTO_MS = 30000;
+
+const MESAS_VALIDAS = [
+    "Mesa 1", "Mesa 2", "Mesa 3", "Mesa 4", "Mesa 5", "Mesa 6", "Mesa 7",
+    "De pie 1", "De pie 2", "De pie 3", "De pie 4", "De pie 5",
+    "Barra", "Para Llevar"
+];
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
-const SABORES_REFRESCO = ["Coca","Coca sin azúcar","Sidral Mundet rojo","Agua mineral","Sangría","Jarritos","Del Valle de mango", "Sidral"];
+const SABORES_REFRESCO = ["Coca","Coca sin azúcar","Sidral Mundet rojo","Agua mineral","Sangría","Jarritos","Del Valle de mango","Sidral"];
 
 const PRODUCTOS = [
     // Tacos y Carnitas
@@ -364,66 +385,369 @@ const PRODUCTOS = [
     { id: 603, cat: 'promos', nombre: 'Promo: Torta Especial + Refresco', sub: 'Miércoles y Jueves', precio: 115, esComida: true, llevaCarne: false, llevaRefresco: true, esPromo: true }
 ];
 
-let cuentasMesas = {
-    "Mesa 1": [], "Mesa 2": [], "Mesa 3": [], "Mesa 4": [],
-    "Mesa 5": [], "Mesa 6": [], "Mesa 7": [],
-    "De pie 1": [], "De pie 2": [], "De pie 3": [], "De pie 4": [], "De pie 5": [],
-    "Barra": [], "Para Llevar": []
+// ==================== UTILIDADES SEGURAS ====================
+function escaparHTML(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function generarUUID() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+
+function leerLS(clave, defecto) {
+    try {
+        const raw = localStorage.getItem(clave);
+        if (raw === null) return defecto;
+        const parsed = JSON.parse(raw);
+        return parsed === null ? defecto : parsed;
+    } catch (e) {
+        console.warn("Error leyendo localStorage (" + clave + "):", e);
+        return defecto;
+    }
+}
+
+function escribirLS(clave, valor) {
+    try {
+        localStorage.setItem(clave, JSON.stringify(valor));
+        document.getElementById("storageBanner").style.display = "none";
+        return true;
+    } catch (e) {
+        console.error("Error guardando en localStorage (" + clave + "):", e);
+        document.getElementById("storageBanner").style.display = "block";
+        return false;
+    }
+}
+
+function dinero(n) {
+    return '$' + Number(n || 0).toFixed(2);
+}
+
+async function fetchConTimeout(url, opciones = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...opciones, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function postAppsScript(payloadObj) {
+    const bodyStr = JSON.stringify({ ...payloadObj, token: API_TOKEN_SHEETS });
+    const res = await fetchConTimeout(URL_GOOGLE_SHEETS, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: bodyStr
+    });
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+    }
+    const text = await res.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        throw new Error("Respuesta no válida de Google Sheets");
+    }
+    if (data.status !== "ok") {
+        throw new Error(data.message || "Error reportado por Google Sheets");
+    }
+    return data;
+}
+
+// ==================== ESTADO INICIAL DESDE LOCALSTORAGE (ANTES DE SOCKET) ====================
+const cuentasVacias = () => {
+    const obj = {};
+    MESAS_VALIDAS.forEach(m => { obj[m] = []; });
+    return obj;
 };
-let personasMesas = JSON.parse(localStorage.getItem('personas_negrita') || '{}');
-let mesaActual = "Mesa 1";
+
+let cuentasMesas = Object.assign(cuentasVacias(), leerLS('cuentas_negrita', {}));
+let personasMesas = leerLS('personas_negrita', {});
+let metaMesas = leerLS('meta_mesas_negrita', {}); // { [mesa]: { actualizadoEn: number, dirty: boolean } }
+let colaPendientes = leerLS('cola_sheets_negrita', []); // [{ tipo: 'VENTA'|'GASTO', id: string, payload: object, creadoEn: string }]
+let gastosLocales = leerLS('gastos_turno_negrita', []);
+let mesaActual = localStorage.getItem('mesa_actual_negrita') || "Mesa 1";
+if (!MESAS_VALIDAS.includes(mesaActual)) mesaActual = "Mesa 1";
+let categoriaActual = localStorage.getItem('categoria_actual_negrita') || "tacos";
+
+// Normalizar ítems heredados para garantizar banderas separadas (impreso vs entregado)
+MESAS_VALIDAS.forEach(m => {
+    if (!Array.isArray(cuentasMesas[m])) cuentasMesas[m] = [];
+    cuentasMesas[m] = cuentasMesas[m].map(it => ({
+        ...it,
+        impreso: Boolean(it.impreso),
+        entregado: Boolean(it.entregado)
+    }));
+    if (!metaMesas[m]) {
+        metaMesas[m] = { actualizadoEn: 0, dirty: false };
+    }
+});
+
+// Restaurar selección visual del <select> de mesa inmediatamente
+document.getElementById("selectMesa").value = mesaActual;
+
+let destinoClave = "corte";
+let corteEstimadoActual = null;
 let productoSeleccionado = null;
 let productoRefresco = null;
 let opcionVerduraSeleccionada = "Con todo";
 let huaracheOpciones = { salsa: "Salsa Verde", cebolla: "Con cebolla", queso: "Con queso" };
-let refrescoPromoSeleccionado = "Coca";
+let refrescoPromoSeleccionado = null; // Obligatorio elegir explícitamente
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
-let numeroOrdenActual = parseInt(localStorage.getItem('num_orden_negrita') || '1');
-let gastosLocales = JSON.parse(localStorage.getItem('gastos_turno_negrita') || '[]');
+let cobroEnCurso = false;
+let sincronizandoCola = false;
+let ultimoErrorSync = "";
 
-// Sincronización Socket.IO en tiempo real
+// ==================== PERSISTENCIA LOCAL CENTRALIZADA ====================
+function persistirEstadoMesas() {
+    escribirLS('cuentas_negrita', cuentasMesas);
+    escribirLS('personas_negrita', personasMesas);
+    escribirLS('meta_mesas_negrita', metaMesas);
+    try {
+        localStorage.setItem('mesa_actual_negrita', mesaActual);
+        localStorage.setItem('categoria_actual_negrita', categoriaActual);
+    } catch (e) {
+        document.getElementById("storageBanner").style.display = "block";
+    }
+}
+
+function guardarColaPendientes() {
+    escribirLS('cola_sheets_negrita', colaPendientes);
+    actualizarIndicadorSync();
+}
+
+function guardarGastosLocales() {
+    escribirLS('gastos_turno_negrita', gastosLocales);
+}
+
+function actualizarIndicadorSync() {
+    const pill = document.getElementById("syncStatusPill");
+    const ventasPend = colaPendientes.filter(x => x.tipo === "VENTA").length;
+    const gastosPend = colaPendientes.filter(x => x.tipo === "GASTO").length;
+    const totalPend = colaPendientes.length;
+
+    pill.classList.remove("pendiente", "error");
+    if (sincronizandoCola) {
+        pill.classList.add("pendiente");
+        pill.innerText = `⏳ Enviando (${totalPend})...`;
+        return;
+    }
+    if (totalPend === 0) {
+        pill.innerText = "✅ Todo sincronizado";
+    } else {
+        pill.classList.add(ultimoErrorSync ? "error" : "pendiente");
+        const partes = [];
+        if (ventasPend > 0) partes.push(`${ventasPend} venta(s)`);
+        if (gastosPend > 0) partes.push(`${gastosPend} gasto(s)`);
+        pill.innerText = `⚠️ ${partes.join(" y ")} sin enviar a Sheets`;
+    }
+}
+
+// ==================== SOCKET.IO Y RESOLUCIÓN DE CONFLICTOS ====================
+const socket = io(SERVIDOR_SYNC, {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000
+});
+
+function actualizarBadgeWS(conectado) {
+    const el = document.getElementById("wsBadge");
+    el.style.color = conectado ? "#2ecc71" : "#e74c3c";
+    el.title = conectado ? "Conectado al servidor local" : "Sin conexión al servidor local";
+}
+
+function sincronizarMesasSuciasConServidor() {
+    if (!socket.connected) return;
+    MESAS_VALIDAS.forEach(mesa => {
+        if (metaMesas[mesa] && metaMesas[mesa].dirty) {
+            socket.emit('actualizar_mesa', {
+                mesa,
+                items: cuentasMesas[mesa] || [],
+                personas: infoPersonasDeMesa(mesa),
+                actualizadoEn: metaMesas[mesa].actualizadoEn || Date.now()
+            });
+        }
+    });
+}
+
+socket.on('connect', () => {
+    actualizarBadgeWS(true);
+    sincronizarMesasSuciasConServidor();
+});
+
+socket.on('disconnect', () => {
+    actualizarBadgeWS(false);
+});
+
 socket.on('estado_inicial', (db) => {
-    if (db && db.cuentas) {
-        cuentasMesas = Object.assign(cuentasMesas, db.cuentas);
-        personasMesas = Object.assign(personasMesas, db.personas || {});
-        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+    if (!db || !db.cuentas) return;
+    MESAS_VALIDAS.forEach(mesa => {
+        const srvObj = db.cuentas[mesa];
+        const srvItems = Array.isArray(srvObj) ? srvObj : (srvObj && Array.isArray(srvObj.items) ? srvObj.items : []);
+        const srvTs = (srvObj && typeof srvObj.actualizadoEn === "number") ? srvObj.actualizadoEn : 0;
+        const srvPersonas = (db.personas && db.personas[mesa]) ? db.personas[mesa] : { total: 1, actual: 1 };
+
+        const localMeta = metaMesas[mesa] || { actualizadoEn: 0, dirty: false };
+
+        if (localMeta.dirty && localMeta.actualizadoEn >= srvTs) {
+            // El cambio local sin sincronizar es más reciente o igual: conservar local y empujar al servidor
+            socket.emit('actualizar_mesa', {
+                mesa,
+                items: cuentasMesas[mesa] || [],
+                personas: infoPersonasDeMesa(mesa),
+                actualizadoEn: localMeta.actualizadoEn
+            });
+        } else {
+            // El servidor tiene estado más reciente (o no hay cambios locales pendientes)
+            cuentasMesas[mesa] = srvItems.map(it => ({
+                ...it,
+                impreso: Boolean(it.impreso),
+                entregado: Boolean(it.entregado)
+            }));
+            personasMesas[mesa] = srvPersonas;
+            metaMesas[mesa] = { actualizadoEn: srvTs, dirty: false };
+        }
+    });
+    persistirEstadoMesas();
+    renderComanda();
+});
+
+socket.on('mesa_actualizada', (data) => {
+    if (!data || !data.mesa || !MESAS_VALIDAS.includes(data.mesa)) return;
+    const srvTs = typeof data.actualizadoEn === "number" ? data.actualizadoEn : Date.now();
+    const localMeta = metaMesas[data.mesa] || { actualizadoEn: 0, dirty: false };
+
+    // Si este dispositivo acaba de confirmar o recibir un timestamp mayor o igual, limpiar bandera dirty
+    if (localMeta.dirty && localMeta.actualizadoEn > srvTs) {
+        return;
+    }
+
+    cuentasMesas[data.mesa] = (Array.isArray(data.items) ? data.items : []).map(it => ({
+        ...it,
+        impreso: Boolean(it.impreso),
+        entregado: Boolean(it.entregado)
+    }));
+    if (data.personas) {
+        personasMesas[data.mesa] = data.personas;
+    }
+    metaMesas[data.mesa] = { actualizadoEn: srvTs, dirty: false };
+    persistirEstadoMesas();
+
+    if (mesaActual === data.mesa) {
         renderComanda();
     }
 });
 
-socket.on('mesa_actualizada', (data) => {
-    if (data && data.mesa) {
-        cuentasMesas[data.mesa] = data.items || [];
-        if (data.personas) personasMesas[data.mesa] = data.personas;
-        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
-        if (mesaActual === data.mesa) {
-            renderComanda();
-        }
-    }
-});
-
 socket.on('personas_actualizadas', (data) => {
-    if (data && data.mesa) {
+    if (!data || !data.mesa || !MESAS_VALIDAS.includes(data.mesa)) return;
+    const srvTs = typeof data.actualizadoEn === "number" ? data.actualizadoEn : Date.now();
+    if (data.personas) {
         personasMesas[data.mesa] = data.personas;
-        localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
-        if (mesaActual === data.mesa) {
-            renderPersonas();
-            renderComanda();
-        }
+    }
+    if (!metaMesas[data.mesa]) metaMesas[data.mesa] = { actualizadoEn: 0, dirty: false };
+    if (srvTs >= metaMesas[data.mesa].actualizadoEn) {
+        metaMesas[data.mesa].actualizadoEn = srvTs;
+        metaMesas[data.mesa].dirty = false;
+    }
+    persistirEstadoMesas();
+    if (mesaActual === data.mesa) {
+        renderPersonas();
+        renderComanda();
     }
 });
 
-function guardarGastosLocales() {
-    localStorage.setItem('gastos_turno_negrita', JSON.stringify(gastosLocales));
+// ==================== COLA DE SINCRONIZACIÓN CON GOOGLE SHEETS ====================
+async function procesarColaPendientes(mostrarAlertaManual = false) {
+    if (sincronizandoCola) return;
+    if (colaPendientes.length === 0) {
+        ultimoErrorSync = "";
+        actualizarIndicadorSync();
+        if (mostrarAlertaManual) alert("✅ Todo está sincronizado con Google Sheets.");
+        return;
+    }
+
+    sincronizandoCola = true;
+    actualizarIndicadorSync();
+
+    let procesados = 0;
+    let errorDetectado = "";
+
+    // Iterar sobre una copia de IDs para procesar en orden FIFO
+    const snapshot = [...colaPendientes];
+    for (const item of snapshot) {
+        try {
+            const resp = await postAppsScript(item.payload);
+            // Eliminar de la cola real solo tras confirmación { status: "ok" }
+            colaPendientes = colaPendientes.filter(x => x.id !== item.id);
+            guardarColaPendientes();
+            procesados++;
+
+            // Si era gasto, actualizar folio/estado en el historial local reciente
+            if (item.tipo === "GASTO") {
+                const gLocal = gastosLocales.find(g => g.idGasto === item.id);
+                if (gLocal) {
+                    gLocal.sincronizado = true;
+                    guardarGastosLocales();
+                }
+            }
+            console.log(`Sincronizado ${item.tipo} (${item.id}):`, resp);
+        } catch (err) {
+            errorDetectado = err.message || "Sin conexión";
+            console.warn(`Fallo sincronizando ${item.tipo} (${item.id}):`, err);
+            break; // Detener cola ante fallo de red para respetar orden y ahorrar batería
+        }
+    }
+
+    sincronizandoCola = false;
+    ultimoErrorSync = errorDetectado;
+    actualizarIndicadorSync();
+    if (document.getElementById("modalGasto").style.display === "flex") {
+        renderListaGastos();
+    }
+
+    if (mostrarAlertaManual) {
+        if (colaPendientes.length === 0) {
+            alert(`✅ Se enviaron ${procesados} registro(s). Todo sincronizado con Google Sheets.`);
+        } else {
+            alert(`⚠️ Enviados: ${procesados}. Aún quedan ${colaPendientes.length} pendiente(s).\nMotivo: ${errorDetectado}`);
+        }
+    }
 }
 
-function dinero(n) {
-    return '$' + Number(n).toFixed(2);
+function forzarSincronizacionCola() {
+    procesarColaPendientes(true);
 }
 
-// ---- Contraseña compartida (Corte y Gastos) ----
+window.addEventListener('online', () => {
+    procesarColaPendientes(false);
+    sincronizarMesasSuciasConServidor();
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        renderComanda();
+        procesarColaPendientes(false);
+        sincronizarMesasSuciasConServidor();
+    }
+});
+
+setInterval(() => {
+    if (colaPendientes.length > 0 && navigator.onLine !== false) {
+        procesarColaPendientes(false);
+    }
+}, INTERVALO_REINTENTO_MS);
+
+// ==================== CONTRASEÑA COMPARTIDA (CORTE Y GASTOS) ====================
 function pedirClave(destino) {
     destinoClave = destino;
     document.getElementById("claveTexto").innerText = destino === "gasto"
@@ -455,7 +779,7 @@ function validarClave() {
     }
 }
 
-// ---- Gastos ----
+// ==================== GASTOS (CON COLA LOCAL Y CONFIRMACIÓN REAL) ====================
 function abrirModalGasto() {
     document.getElementById("gastoConcepto").value = "";
     document.getElementById("gastoMonto").value = "";
@@ -475,10 +799,17 @@ function renderListaGastos() {
         return;
     }
     contenedor.innerHTML = `<p style="font-weight:bold;color:#c0392b;margin-bottom:4px;">Últimos gastos anotados aquí:</p>` +
-        gastosLocales.map(g => `<div class="gasto-item"><span>${g.concepto}</span><strong>-${dinero(g.monto)}</strong></div>`).join('');
+        gastosLocales.slice().reverse().map(g => {
+            const pend = colaPendientes.some(x => x.id === g.idGasto);
+            const badge = pend ? `<span style="color:#d35400;font-size:.75rem;">⏳ Pendiente</span>` : `<span style="color:#1e8449;font-size:.75rem;">✓ En Sheets</span>`;
+            return `<div class="gasto-item">
+                <span style="flex:1;">${escaparHTML(g.concepto)}<br>${badge}</span>
+                <strong>-${dinero(g.monto)}</strong>
+            </div>`;
+        }).join('');
 }
 
-function guardarGasto() {
+async function guardarGasto() {
     const concepto = document.getElementById("gastoConcepto").value.trim();
     const monto = parseFloat(document.getElementById("gastoMonto").value);
 
@@ -491,54 +822,90 @@ function guardarGasto() {
         return;
     }
 
+    const idGasto = generarUUID();
     const fechaHora = new Date().toLocaleString('es-MX');
-    const nuevoGasto = { fecha: fechaHora, concepto: concepto, monto: Number(monto.toFixed(2)) };
+    const montoRedondeado = Number(monto.toFixed(2));
 
-    gastosLocales.push(nuevoGasto);
+    const payloadGasto = {
+        tipo: "GASTO",
+        idGasto: idGasto,
+        fecha: fechaHora,
+        concepto: concepto,
+        monto: montoRedondeado
+    };
+
+    // 1. Guardar en cola local y lista de turno antes de red
+    colaPendientes.push({
+        tipo: "GASTO",
+        id: idGasto,
+        payload: payloadGasto,
+        creadoEn: fechaHora
+    });
+    guardarColaPendientes();
+
+    gastosLocales.push({
+        idGasto: idGasto,
+        fecha: fechaHora,
+        concepto: concepto,
+        monto: montoRedondeado,
+        sincronizado: false
+    });
     guardarGastosLocales();
 
-    if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
-        fetch(URL_GOOGLE_SHEETS, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                tipo: "GASTO",
-                fecha: fechaHora,
-                concepto: concepto,
-                monto: nuevoGasto.monto
-            })
-        }).catch(err => console.error("Error al guardar gasto en Sheets:", err));
-    }
-
-    alert(`Gasto guardado en Google Sheets: ${concepto} (${dinero(nuevoGasto.monto)})`);
     document.getElementById("gastoConcepto").value = "";
     document.getElementById("gastoMonto").value = "";
     renderListaGastos();
+
+    // 2. Intentar enviar de inmediato en segundo plano / espera breve
+    const btn = document.getElementById("btnGuardarGasto");
+    btn.disabled = true;
+    btn.innerText = "Enviando a Sheets...";
+    try {
+        await procesarColaPendientes(false);
+        const siguePendiente = colaPendientes.some(x => x.id === idGasto);
+        if (!siguePendiente) {
+            alert(`✅ Gasto registrado en Google Sheets: ${concepto} (${dinero(montoRedondeado)})`);
+        } else {
+            alert(`⚠️ Gasto guardado en este dispositivo (${dinero(montoRedondeado)}). Se enviará a Sheets al volver el internet.`);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Guardar gasto";
+        renderListaGastos();
+    }
 }
 
-// ---- Personas ----
-function guardarPersonas() {
-    localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
-    socket.emit('actualizar_personas', {
-        mesa: mesaActual,
-        personas: infoPersonas()
-    });
-}
-
+// ==================== PERSONAS POR MESA ====================
 function personaDeItem(item) {
     return item.persona || 1;
 }
 
-function infoPersonas() {
-    if (!personasMesas[mesaActual]) personasMesas[mesaActual] = { total: 1, actual: 1 };
-    const info = personasMesas[mesaActual];
-    const cuenta = cuentasMesas[mesaActual] || [];
+function infoPersonasDeMesa(mesa) {
+    if (!personasMesas[mesa]) personasMesas[mesa] = { total: 1, actual: 1 };
+    const info = personasMesas[mesa];
+    const cuenta = cuentasMesas[mesa] || [];
     const maxItem = cuenta.reduce((m, i) => Math.max(m, personaDeItem(i)), 1);
     if (info.total < maxItem) info.total = maxItem;
     if (info.actual > info.total) info.actual = info.total;
     if (info.actual < 1) info.actual = 1;
     return info;
+}
+
+function infoPersonas() {
+    return infoPersonasDeMesa(mesaActual);
+}
+
+function guardarPersonas() {
+    const ahora = Date.now();
+    metaMesas[mesaActual] = { actualizadoEn: ahora, dirty: true };
+    persistirEstadoMesas();
+    if (socket.connected) {
+        socket.emit('actualizar_personas', {
+            mesa: mesaActual,
+            personas: infoPersonas(),
+            actualizadoEn: ahora
+        });
+    }
 }
 
 function renderPersonas() {
@@ -587,7 +954,7 @@ function quitarPersona() {
 
 function reiniciarPersonas(mesa) {
     personasMesas[mesa] = { total: 1, actual: 1 };
-    localStorage.setItem('personas_negrita', JSON.stringify(personasMesas));
+    persistirEstadoMesas();
 }
 
 function agruparPorPersona(items) {
@@ -605,9 +972,9 @@ function armarOrdenImpresion(items, formatoNombre, conSubtotal) {
     return out;
 }
 
-// ---- Corte de caja GLOBAL leyendo desde Google Sheets ----
+// ==================== CORTE DE CAJA GLOBAL (ATÓMICO EN SHEETS) ====================
 async function abrirModalCorte() {
-    corteGlobalActual = null;
+    corteEstimadoActual = null;
     document.getElementById("corteEfectivo").innerText = "...";
     document.getElementById("corteTarjeta").innerText = "...";
     document.getElementById("corteTransferencia").innerText = "...";
@@ -615,13 +982,13 @@ async function abrirModalCorte() {
     document.getElementById("corteGastos").innerText = "...";
     document.getElementById("corteEfectivoNeto").innerText = "...";
     document.getElementById("corteBalanceFinal").innerText = "...";
-    document.getElementById("corteSubtitulo").innerText = "⏳ Sumando todas las ventas y gastos de Google Sheets...";
+    document.getElementById("corteSubtitulo").innerText = "⏳ Consultando estimado en Google Sheets...";
 
     const btnConfirmar = document.getElementById("btnConfirmarCorte");
     btnConfirmar.disabled = true;
-    btnConfirmar.innerText = "Cargando totales...";
+    btnConfirmar.innerText = "Cargando estimado...";
 
-    const abiertas = Object.keys(cuentasMesas).filter(m => cuentasMesas[m] && cuentasMesas[m].length > 0);
+    const abiertas = MESAS_VALIDAS.filter(m => cuentasMesas[m] && cuentasMesas[m].length > 0);
     const aviso = document.getElementById("corteAviso");
     if (abiertas.length > 0) {
         aviso.style.display = "block";
@@ -630,14 +997,23 @@ async function abrirModalCorte() {
         aviso.style.display = "none";
     }
 
+    const bloqueo = document.getElementById("corteBloqueo");
+    if (colaPendientes.length > 0) {
+        bloqueo.style.display = "block";
+        bloqueo.innerText = `🛑 Tienes ${colaPendientes.length} movimiento(s) sin enviar a Google Sheets en este dispositivo. Sincronízalos primero antes de hacer el corte.`;
+    } else {
+        bloqueo.style.display = "none";
+    }
+
     document.getElementById("modalCorte").style.display = "flex";
 
     try {
-        const resp = await fetch(URL_GOOGLE_SHEETS + "?t=" + Date.now());
+        const urlGet = `${URL_GOOGLE_SHEETS}?token=${encodeURIComponent(API_TOKEN_SHEETS)}&t=${Date.now()}`;
+        const resp = await fetchConTimeout(urlGet, { method: "GET" });
         const r = await resp.json();
-        if (r.error) throw new Error(r.error);
+        if (r.error || r.status === "error") throw new Error(r.error || r.message);
 
-        corteGlobalActual = r;
+        corteEstimadoActual = r;
         document.getElementById("corteEfectivo").innerText = dinero(r.efectivo);
         document.getElementById("corteTarjeta").innerText = dinero(r.tarjeta);
         document.getElementById("corteTransferencia").innerText = dinero(r.transferencia);
@@ -646,15 +1022,24 @@ async function abrirModalCorte() {
         document.getElementById("corteEfectivoNeto").innerText = dinero(r.efectivoNeto);
         document.getElementById("corteBalanceFinal").innerText = dinero(r.balanceFinal);
 
-        document.getElementById("corteSubtitulo").innerText = r.ordenes === 0
-            ? "Aún no hay ventas pendientes de corte en Google Sheets."
-            : `Global: ${r.ordenes} orden(es) de todos los dispositivos${r.primeraFecha ? ' desde ' + r.primeraFecha : ''}`;
+        let sub = r.ordenes === 0 && r.totalGastos === 0
+            ? "ESTIMADO: Aún no hay ventas ni gastos pendientes de corte en Sheets."
+            : `ESTIMADO: ${r.ordenes} orden(es) abiertas${r.primeraFecha ? ' desde ' + r.primeraFecha : ''}. Los totales oficiales se calculan al confirmar.`;
+        if (r.metodosNoReconocidos && r.metodosNoReconocidos.length > 0) {
+            sub += ` ⚠️ Métodos no reconocidos: ${r.metodosNoReconocidos.join(", ")}`;
+        }
+        document.getElementById("corteSubtitulo").innerText = sub;
 
-        btnConfirmar.disabled = false;
-        btnConfirmar.innerText = "Hacer corte y cerrar turno en Sheets";
+        if (colaPendientes.length > 0) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerText = "🔄 Enviar pendientes primero";
+        } else {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerText = "Hacer corte oficial y cerrar turno";
+        }
     } catch (err) {
         console.error("Error leyendo corte desde Sheets:", err);
-        document.getElementById("corteSubtitulo").innerText = "❌ Error al conectar con Google Sheets. Verifica tu internet o la implementación del script.";
+        document.getElementById("corteSubtitulo").innerText = "❌ Error al conectar con Google Sheets: " + (err.message || "Sin conexión");
         btnConfirmar.innerText = "Sin conexión con Sheets";
     }
 }
@@ -663,61 +1048,93 @@ function cerrarModalCorte() {
     document.getElementById("modalCorte").style.display = "none";
 }
 
-function confirmarCorte() {
-    if (!corteGlobalActual) return;
-    const r = corteGlobalActual;
-
-    if (r.ordenes === 0 && r.totalGastos === 0) {
-        alert("No hay ventas ni gastos abiertos en Google Sheets para cortar.");
+async function confirmarCorte() {
+    // Bloquear corte si existen pendientes locales sin enviar a Sheets
+    if (colaPendientes.length > 0) {
+        await procesarColaPendientes(true);
+        if (colaPendientes.length > 0) {
+            return; // Sigue habiendo pendientes; no permitir corte
+        }
+        // Refrescar vista previa tras enviar los pendientes
+        await abrirModalCorte();
         return;
     }
-    if (!confirm("¿Hacer el corte de caja global? Se guardará el resumen y las ventas/gastos actuales quedarán cerrados en $0.00 para el próximo turno.")) return;
+
+    if (!confirm("¿Confirmar el corte de caja global? Google Sheets calculará los totales oficiales en este instante y cerrará todas las ventas y gastos abiertos.")) return;
 
     const btnConfirmar = document.getElementById("btnConfirmarCorte");
     btnConfirmar.disabled = true;
-    btnConfirmar.innerText = "Guardando corte...";
+    btnConfirmar.innerText = "Cerrando turno en Sheets...";
 
+    const idCorte = generarUUID();
     const payload = {
         tipo: "CORTE",
-        fecha: new Date().toLocaleString('es-MX'),
-        ordenes: r.ordenes,
-        primerFolio: r.primerFolio || "N/A",
-        ultimoFolio: r.ultimoFolio || "N/A",
-        efectivo: r.efectivo,
-        tarjeta: r.tarjeta,
-        transferencia: r.transferencia,
-        total: r.total,
-        totalGastos: r.totalGastos,
-        efectivoNeto: r.efectivoNeto,
-        balanceFinal: r.balanceFinal
+        idCorte: idCorte,
+        fecha: new Date().toLocaleString('es-MX')
     };
 
-    fetch(URL_GOOGLE_SHEETS, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    }).then(() => {
+    try {
+        const resp = await postAppsScript(payload);
+        const oficial = resp.resumen;
+
+        if (!oficial) {
+            throw new Error("Sheets confirmó pero no devolvió el resumen del corte.");
+        }
+
+        if (oficial.ordenes === 0 && oficial.totalGastos === 0 && !resp.duplicado) {
+            cerrarModalCorte();
+            alert("ℹ️ No había ventas ni gastos abiertos en Google Sheets para cerrar (posiblemente otro dispositivo acaba de hacer el corte).");
+            return;
+        }
+
+        // Limpiar gastos locales solo tras confirmación real del servidor
         gastosLocales = [];
         guardarGastosLocales();
         cerrarModalCorte();
-        alert(`✅ Corte global guardado.\nTotal vendido: ${dinero(r.total)}\nGastos: -${dinero(r.totalGastos)}\nEfectivo neto en caja: ${dinero(r.efectivoNeto)}\nBalance final: ${dinero(r.balanceFinal)}`);
-    }).catch(err => {
+
+        let msg = `✅ CORTE OFICIAL GUARDADO (${oficial.idCorte || idCorte})\n` +
+            `Órdenes cerradas: ${oficial.ordenes} (${oficial.primerFolio} a ${oficial.ultimoFolio})\n` +
+            `Efectivo: ${dinero(oficial.efectivo)}\n` +
+            `Tarjeta: ${dinero(oficial.tarjeta)}\n` +
+            `Transferencia: ${dinero(oficial.transferencia)}\n` +
+            `Total vendido: ${dinero(oficial.total)}\n` +
+            `Gastos: -${dinero(oficial.totalGastos)}\n` +
+            `Efectivo neto en caja: ${dinero(oficial.efectivoNeto)}\n` +
+            `Balance final: ${dinero(oficial.balanceFinal)}`;
+
+        if (corteEstimadoActual && (
+            Number(corteEstimadoActual.total) !== Number(oficial.total) ||
+            Number(corteEstimadoActual.totalGastos) !== Number(oficial.totalGastos)
+        )) {
+            msg += `\n\nℹ️ Nota: El total oficial (${dinero(oficial.total)}) difiere del estimado previo (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`;
+        }
+
+        if (oficial.metodosNoReconocidos && oficial.metodosNoReconocidos.length > 0) {
+            msg += `\n\n⚠️ Aviso: Hubo ventas con método no reconocido (${oficial.metodosNoReconocidos.join(", ")}) incluidas en Total Vendido.`;
+        }
+
+        alert(msg);
+    } catch (err) {
         console.error("Error al guardar corte:", err);
         btnConfirmar.disabled = false;
-        btnConfirmar.innerText = "Hacer corte y cerrar turno en Sheets";
-        alert("No se pudo guardar el corte (sin conexión). Inténtalo de nuevo.");
-    });
+        btnConfirmar.innerText = "Hacer corte oficial y cerrar turno";
+        alert("❌ No se pudo realizar el corte.\nDetalle: " + (err.message || "Error de red") + "\nTus datos locales siguen intactos para reintentar.");
+    }
 }
 
-// ---- Cuentas y sincronización con el servidor ----
+// ==================== CUENTAS Y SINCRONIZACIÓN DE MESAS ====================
 function guardarEnAlmacenamiento() {
-    localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-    socket.emit('actualizar_mesa', {
-        mesa: mesaActual,
-        items: obtenerMesaActual(),
-        personas: infoPersonas()
-    });
+    const ahora = Date.now();
+    metaMesas[mesaActual] = { actualizadoEn: ahora, dirty: true };
+    persistirEstadoMesas();
+    if (socket.connected) {
+        socket.emit('actualizar_mesa', {
+            mesa: mesaActual,
+            items: obtenerMesaActual(),
+            personas: infoPersonas(),
+            actualizadoEn: ahora
+        });
+    }
 }
 
 function obtenerMesaActual() {
@@ -726,18 +1143,20 @@ function obtenerMesaActual() {
 }
 
 function filtrarCategoria(categoria, e = null) {
+    categoriaActual = categoria;
+    persistirEstadoMesas();
     document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
     if (e && e.target) {
         e.target.classList.add('active');
     } else {
-        const b = Array.from(document.querySelectorAll('.btn-tab')).find(x => x.getAttribute('onclick') && x.getAttribute('onclick').includes(`'${categoria}'`));
+        const b = document.querySelector(`.btn-tab[data-cat="${categoria}"]`);
         if (b) b.classList.add('active');
     }
     document.getElementById("menuGrid").innerHTML = PRODUCTOS.filter(p => p.cat === categoria).map(p => `
         <div class="card-prod ${p.esPromo ? 'promo-card' : ''}" onclick="iniciarAgregar(${p.id})">
             <div>
-                <div class="prod-nombre">${p.nombre}</div>
-                ${p.sub ? `<div class="prod-sub">${p.sub}</div>` : ''}
+                <div class="prod-nombre">${escaparHTML(p.nombre)}</div>
+                ${p.sub ? `<div class="prod-sub">${escaparHTML(p.sub)}</div>` : ''}
             </div>
             <div class="prod-precio">$${p.precio}</div>
         </div>`).join('');
@@ -756,11 +1175,11 @@ function iniciarAgregar(id) {
     }
 }
 
-// ---- Refrescos ----
+// ==================== REFRESCOS ====================
 function abrirModalRefresco(prod) {
     productoRefresco = prod;
     document.getElementById("refrescosContainer").innerHTML = SABORES_REFRESCO.map((s, i) =>
-        `<button type="button" class="btn-refresco" onclick="elegirRefresco(${i})">${s}</button>`).join('');
+        `<button type="button" class="btn-refresco" onclick="elegirRefresco(${i})">${escaparHTML(s)}</button>`).join('');
     document.getElementById("modalRefresco").style.display = "flex";
 }
 
@@ -775,9 +1194,11 @@ function elegirRefresco(indice) {
     cerrarModalRefresco();
 }
 
-// ---- Opciones de comida, huaraches y promociones ----
+// ==================== OPCIONES DE COMIDA, HUARACHES Y PROMOCIONES ====================
 function abrirModalOpciones(prod) {
     document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${infoPersonas().actual}`;
+    const btnConfirmar = document.getElementById("btnConfirmarOpciones");
+
     const secPeso = document.getElementById("seccionPeso");
     if (prod.esPorKilo) {
         secPeso.style.display = "block";
@@ -792,8 +1213,8 @@ function abrirModalOpciones(prod) {
         secCarnes.style.display = "block";
         container.innerHTML = TIPOS_CARNE.map(c => `
             <label class="check-btn">
-                <input type="checkbox" name="carneCheck" value="${c}">
-                <span>${c}</span>
+                <input type="checkbox" name="carneCheck" value="${escaparHTML(c)}">
+                <span>${escaparHTML(c)}</span>
             </label>`).join('');
     } else {
         secCarnes.style.display = "none";
@@ -816,13 +1237,16 @@ function abrirModalOpciones(prod) {
     const refContainer = document.getElementById("refrescosPromoContainer");
     if (prod.llevaRefresco) {
         secRefrescoPromo.style.display = "block";
-        refrescoPromoSeleccionado = SABORES_REFRESCO[0];
+        refrescoPromoSeleccionado = null; // Ninguno preseleccionado
+        btnConfirmar.disabled = true; // Obligar a elegir refresco
         refContainer.innerHTML = SABORES_REFRESCO.map((s, idx) =>
-            `<button type="button" class="btn-refresco ${idx === 0 ? 'active' : ''}" onclick="setRefrescoPromo('${s}', event)">${s}</button>`
+            `<button type="button" class="btn-refresco" onclick="setRefrescoPromo(${idx}, event)">${escaparHTML(s)}</button>`
         ).join('');
     } else {
         secRefrescoPromo.style.display = "none";
         refContainer.innerHTML = "";
+        refrescoPromoSeleccionado = null;
+        btnConfirmar.disabled = false;
     }
 
     document.getElementById("notaExtra").value = "";
@@ -847,10 +1271,11 @@ function setHuaracheOpt(grupo, valor, el) {
     if (el) el.classList.add('active');
 }
 
-function setRefrescoPromo(sabor, e) {
-    refrescoPromoSeleccionado = sabor;
+function setRefrescoPromo(indice, e) {
+    refrescoPromoSeleccionado = SABORES_REFRESCO[indice];
     document.querySelectorAll('#refrescosPromoContainer .btn-refresco').forEach(b => b.classList.remove('active'));
     if (e && e.target) e.target.classList.add('active');
+    document.getElementById("btnConfirmarOpciones").disabled = false;
 }
 
 function cerrarModalOpciones() {
@@ -886,6 +1311,12 @@ function setVerdura(tipo) {
 }
 
 function confirmarAgregarConOpciones() {
+    if (!productoSeleccionado) return;
+    if (productoSeleccionado.llevaRefresco && !refrescoPromoSeleccionado) {
+        alert("Selecciona primero el refresco de la promoción.");
+        return;
+    }
+
     let nombreFinal = productoSeleccionado.nombre;
     let precioFinal = productoSeleccionado.precio;
 
@@ -921,14 +1352,31 @@ function confirmarAgregarConOpciones() {
     cerrarModalOpciones();
 }
 
+// ==================== BANDERAS SEPARADAS (IMPRESO vs ENTREGADO) ====================
 function agregarDirecto(nombre, precio, notas) {
     const cuenta = obtenerMesaActual();
     const persona = infoPersonas().actual;
-    const existente = cuenta.find(item => item.nombre === nombre && item.notas === notas && !item.impreso && personaDeItem(item) === persona);
+    // Solo agrupar si no está impreso NI entregado y pertenece a la misma persona
+    const existente = cuenta.find(item =>
+        item.nombre === nombre &&
+        item.notas === notas &&
+        !item.impreso &&
+        !item.entregado &&
+        personaDeItem(item) === persona
+    );
     if (existente) {
         existente.cant += 1;
     } else {
-        cuenta.push({ idTemp: Date.now() + Math.random(), nombre, precio, cant: 1, notas, impreso: false, persona });
+        cuenta.push({
+            idTemp: Date.now() + Math.random(),
+            nombre,
+            precio,
+            cant: 1,
+            notas,
+            impreso: false,
+            entregado: false,
+            persona
+        });
     }
     guardarEnAlmacenamiento();
     renderComanda();
@@ -938,11 +1386,23 @@ function cambiarCantidad(idTemp, delta) {
     const cuenta = obtenerMesaActual();
     const index = cuenta.findIndex(item => item.idTemp === idTemp);
     if (index > -1) {
+        // Bloquear aumento/disminución si ya se mandó a cocina (salvo eliminar si no está impreso)
+        if (cuenta[index].impreso) return;
         cuenta[index].cant += delta;
         if (cuenta[index].cant <= 0) cuenta.splice(index, 1);
     }
     guardarEnAlmacenamiento();
     renderComanda();
+}
+
+function eliminarItemNoImpreso(idTemp) {
+    const cuenta = obtenerMesaActual();
+    const index = cuenta.findIndex(item => item.idTemp === idTemp);
+    if (index > -1 && !cuenta[index].impreso) {
+        cuenta.splice(index, 1);
+        guardarEnAlmacenamiento();
+        renderComanda();
+    }
 }
 
 function marcarTodoEntregado() {
@@ -951,13 +1411,24 @@ function marcarTodoEntregado() {
         alert("No hay productos en esta mesa.");
         return;
     }
-    const pendientes = cuenta.filter(i => !i.impreso);
-    if (pendientes.length === 0) {
+    const sinEntregar = cuenta.filter(i => !i.entregado);
+    if (sinEntregar.length === 0) {
         alert("Todos los productos de esta mesa ya están marcados como entregados.");
         return;
     }
-    pendientes.forEach(i => i.impreso = true);
-    guardarEnAlmacenamiento();
+    sinEntregar.forEach(i => { i.entregado = true; });
+
+    const ahora = Date.now();
+    metaMesas[mesaActual] = { actualizadoEn: ahora, dirty: true };
+    persistirEstadoMesas();
+    if (socket.connected) {
+        socket.emit('marcar_entregado', {
+            mesa: mesaActual,
+            items: cuenta,
+            personas: infoPersonas(),
+            actualizadoEn: ahora
+        });
+    }
     renderComanda();
 }
 
@@ -965,10 +1436,11 @@ function renderComanda() {
     const cuenta = obtenerMesaActual();
     const info = infoPersonas();
     const lista = document.getElementById("listaArticulos");
-    const pendientes = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
+    const porMandar = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
+    const porEntregar = cuenta.filter(i => !i.entregado).reduce((acc, i) => acc + i.cant, 0);
     const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
 
-    document.getElementById("cantPendiente").innerText = `${pendientes} nuevos por comanda`;
+    document.getElementById("cantPendiente").innerText = `${porMandar} por mandar · ${porEntregar} por entregar`;
     document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
     renderPersonas();
 
@@ -979,19 +1451,45 @@ function renderComanda() {
 
     lista.innerHTML = agruparPorPersona(cuenta).map(g => {
         const sub = g.items.reduce((a, i) => a + i.cant * i.precio, 0);
-        const filas = g.items.map(item => `
-        <div class="item-row ${item.impreso ? 'impreso' : ''}">
-            <div style="flex:1;">
-                <strong class="item-nombre">${item.nombre}</strong> ${item.impreso ? '✓' : ''}
-                ${item.notas ? `<div style="font-size:.75rem;color:#0B8770;">${item.notas}</div>` : ''}
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-                ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>` : ''}
-                <span style="min-width:14px;text-align:center;">${item.cant}</span>
-                ${!item.impreso ? `<button class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>` : ''}
-                <span style="font-weight:bold;min-width:45px;text-align:right;">$${item.cant * item.precio}</span>
-            </div>
-        </div>`).join('');
+        const filas = g.items.map(item => {
+            const claseEstado = item.entregado ? 'entregado' : (item.impreso ? 'en-cocina' : '');
+            let badgeEstado = '';
+            if (item.entregado) {
+                badgeEstado = `<span class="tag-estado tag-entregado">Entregado</span>`;
+            } else if (item.impreso) {
+                badgeEstado = `<span class="tag-estado tag-cocina">✓ Cocina</span>`;
+            }
+
+            let controles = '';
+            if (!item.impreso && !item.entregado) {
+                controles = `
+                    <button type="button" class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>
+                    <span style="min-width:14px;text-align:center;">${item.cant}</span>
+                    <button type="button" class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>
+                `;
+            } else if (!item.impreso && item.entregado) {
+                // Entregado sin mandar a cocina: permitir quitar por si hubo error
+                controles = `
+                    <button type="button" class="btn-del-item" title="Quitar artículo" onclick="eliminarItemNoImpreso(${item.idTemp})">✕</button>
+                    <span style="min-width:14px;text-align:center;">${item.cant}</span>
+                `;
+            } else {
+                controles = `<span style="min-width:14px;text-align:center;">${item.cant}</span>`;
+            }
+
+            return `
+            <div class="item-row ${claseEstado}">
+                <div style="flex:1;">
+                    <strong class="item-nombre">${escaparHTML(item.nombre)}</strong>${badgeEstado}
+                    ${item.notas ? `<div style="font-size:.75rem;color:#0B8770;">${escaparHTML(item.notas)}</div>` : ''}
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    ${controles}
+                    <span style="font-weight:bold;min-width:48px;text-align:right;">$${(item.cant * item.precio).toFixed(0)}</span>
+                </div>
+            </div>`;
+        }).join('');
+
         return `<div class="persona-grupo-header ${g.persona === info.actual ? 'activa' : ''}">
                     <span>👤 Persona ${g.persona}</span><span>${dinero(sub)}</span>
                 </div>${filas}`;
@@ -1000,6 +1498,7 @@ function renderComanda() {
 
 function cambiarMesa() {
     mesaActual = document.getElementById("selectMesa").value;
+    persistirEstadoMesas();
     renderComanda();
 }
 
@@ -1021,13 +1520,13 @@ async function mandarComanda() {
         }))
     };
     try {
-        const res = await fetch(SERVIDOR_IMPRESION, {
+        const res = await fetchConTimeout(SERVIDOR_IMPRESION, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
-        });
+        }, 8000);
         if (res.ok) {
-            nuevos.forEach(i => i.impreso = true);
+            nuevos.forEach(i => { i.impreso = true; });
             guardarEnAlmacenamiento();
             renderComanda();
             alert("¡Ticket enviado a cocina!");
@@ -1039,7 +1538,7 @@ async function mandarComanda() {
     }
 }
 
-// ---- Cobro ----
+// ==================== COBRO CON RESPALDO LOCAL Y FOLIO GLOBAL ====================
 function abrirModalCobro() {
     const cuenta = obtenerMesaActual();
     if (cuenta.length === 0) {
@@ -1056,80 +1555,127 @@ function cerrarModalCobro() {
 }
 
 async function procesarPago(metodoPago) {
+    if (cobroEnCurso) return;
     const cuenta = obtenerMesaActual();
     if (cuenta.length === 0) return;
 
-    const total = Number(cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0).toFixed(2));
-    const fechaHora = new Date().toLocaleString('es-MX');
-    const ordenFolio = `#${String(numeroOrdenActual).padStart(4, '0')}`;
+    cobroEnCurso = true;
+    document.querySelectorAll('.btn-metodo').forEach(b => { b.disabled = true; });
 
-    fetch(SERVIDOR_IMPRESION, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            tipo: "CUENTA",
-            numeroOrden: ordenFolio,
-            ubicacion: `${mesaActual} (${metodoPago})`,
+    try {
+        const mesaCobrada = mesaActual;
+        const cuentaCopia = cuenta.map(i => ({ ...i }));
+        const total = Number(cuentaCopia.reduce((acc, i) => acc + (i.cant * i.precio), 0).toFixed(2));
+        const fechaHora = new Date().toLocaleString('es-MX');
+        const idVenta = generarUUID();
+        const folioProvisional = `PEND-${idVenta.slice(-4).toUpperCase()}`;
+
+        const payloadVenta = {
+            tipo: "VENTA",
+            idVenta: idVenta,
+            folioProvisional: folioProvisional,
             fecha: fechaHora,
-            orden: armarOrdenImpresion(cuenta, i => `${i.nombre} ($${i.precio})`, true),
-            personas: agruparPorPersona(cuenta).map(g => ({
-                persona: g.persona,
-                subtotal: g.items.reduce((a, i) => a + i.cant * i.precio, 0),
-                orden: g.items.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas }))
-            })),
-            total: total
-        })
-    }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
+            mesa: mesaCobrada,
+            metodoPago: metodoPago,
+            total: total,
+            productos: cuentaCopia.map(i => ({
+                persona: `Persona ${personaDeItem(i)}`,
+                nombre: i.nombre,
+                notas: i.notas || "",
+                cantidad: i.cant,
+                precioUnitario: i.precio,
+                subtotal: Number((i.cant * i.precio).toFixed(2))
+            }))
+        };
 
-    if (URL_GOOGLE_SHEETS && !URL_GOOGLE_SHEETS.includes("TU_URL")) {
-        fetch(URL_GOOGLE_SHEETS, {
+        // 1. Guardar PRIMERO en la cola local persistente
+        colaPendientes.push({
+            tipo: "VENTA",
+            id: idVenta,
+            payload: payloadVenta,
+            creadoEn: fechaHora
+        });
+        guardarColaPendientes();
+
+        // 2. Vaciar la mesa localmente y notificar al servidor Socket.IO inmediatamente
+        const ahora = Date.now();
+        cuentasMesas[mesaCobrada] = [];
+        personasMesas[mesaCobrada] = { total: 1, actual: 1 };
+        metaMesas[mesaCobrada] = { actualizadoEn: ahora, dirty: true };
+        persistirEstadoMesas();
+        if (socket.connected) {
+            socket.emit('liberar_mesa', { mesa: mesaCobrada, actualizadoEn: ahora });
+        }
+        cerrarModalCobro();
+        renderComanda();
+
+        // 3. Imprimir ticket en segundo plano (sin bloquear cobro)
+        fetch(SERVIDOR_IMPRESION, {
             method: "POST",
-            mode: "no-cors",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                tipo: "VENTA",
-                numeroOrden: ordenFolio,
+                tipo: "CUENTA",
+                numeroOrden: folioProvisional,
+                ubicacion: `${mesaCobrada} (${metodoPago})`,
                 fecha: fechaHora,
-                mesa: mesaActual,
-                metodoPago: metodoPago,
-                total: total,
-                productos: cuenta.map(i => ({
-                    persona: `Persona ${personaDeItem(i)}`,
-                    nombre: i.nombre,
-                    notas: i.notas || "",
-                    cantidad: i.cant,
-                    precioUnitario: i.precio,
-                    subtotal: i.cant * i.precio
-                }))
+                orden: armarOrdenImpresion(cuentaCopia, i => `${i.nombre} ($${i.precio})`, true),
+                personas: agruparPorPersona(cuentaCopia).map(g => ({
+                    persona: g.persona,
+                    subtotal: g.items.reduce((a, i) => a + i.cant * i.precio, 0),
+                    orden: g.items.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas }))
+                })),
+                total: total
             })
-        }).then(() => console.log("Venta y total guardados en Sheets."))
-          .catch(err => console.error("Error al guardar en Sheets:", err));
+        }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
+
+        // 4. Intentar enviar la cola a Google Sheets y confirmar resultado real
+        let folioOficial = null;
+        try {
+            sincronizandoCola = true;
+            actualizarIndicadorSync();
+            const resp = await postAppsScript(payloadVenta);
+            colaPendientes = colaPendientes.filter(x => x.id !== idVenta);
+            ultimoErrorSync = "";
+            folioOficial = resp.folio || null;
+        } catch (err) {
+            ultimoErrorSync = err.message || "Sin internet";
+            console.warn("Venta en cola local pendiente de envío:", err);
+        } finally {
+            sincronizandoCola = false;
+            guardarColaPendientes();
+        }
+
+        // Disparar envío del resto de pendientes si había otros anteriores
+        if (colaPendientes.length > 0 && !ultimoErrorSync) {
+            procesarColaPendientes(false);
+        }
+
+        if (folioOficial) {
+            alert(`✅ Cobro registrado en Google Sheets (${metodoPago}).\nFolio oficial: ${folioOficial}`);
+        } else {
+            alert(`⚠️ Cobro guardado en este dispositivo (${metodoPago} · ${folioProvisional}).\nSe enviará a Google Sheets al volver el internet.`);
+        }
+    } finally {
+        cobroEnCurso = false;
+        document.querySelectorAll('.btn-metodo').forEach(b => { b.disabled = false; });
     }
-
-    numeroOrdenActual++;
-    localStorage.setItem('num_orden_negrita', numeroOrdenActual);
-
-    alert(`¡Cobro exitoso con ${metodoPago}! Orden ${ordenFolio} registrada en Google Sheets.`);
-    cerrarModalCobro();
-
-    cuentasMesas[mesaActual] = [];
-    localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-    reiniciarPersonas(mesaActual);
-    socket.emit('liberar_mesa', mesaActual);
-    renderComanda();
 }
 
 function cerrarMesa() {
     if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
+        const ahora = Date.now();
         cuentasMesas[mesaActual] = [];
-        localStorage.setItem('cuentas_negrita', JSON.stringify(cuentasMesas));
-        reiniciarPersonas(mesaActual);
-        socket.emit('liberar_mesa', mesaActual);
+        personasMesas[mesaActual] = { total: 1, actual: 1 };
+        metaMesas[mesaActual] = { actualizadoEn: ahora, dirty: true };
+        persistirEstadoMesas();
+        if (socket.connected) {
+            socket.emit('liberar_mesa', { mesa: mesaActual, actualizadoEn: ahora });
+        }
         renderComanda();
     }
 }
 
-// ---- Ajuste de altura de la comanda ----
+// ==================== AJUSTE DE ALTURA DE LA COMANDA ====================
 const ALTURA_LISTA_DEFECTO = 170;
 const listaEl = document.getElementById("listaArticulos");
 const panelEl = document.getElementById("comandaPanel");
@@ -1147,7 +1693,7 @@ function ajustarEspacioInferior() {
 }
 
 (function iniciarAjusteComanda() {
-    const guardada = parseInt(localStorage.getItem('altura_comanda_negrita') || '0');
+    const guardada = parseInt(localStorage.getItem('altura_comanda_negrita') || '0', 10);
     aplicarAlturaLista(guardada > 0 ? guardada : ALTURA_LISTA_DEFECTO);
 
     const handle = document.getElementById("resizeHandle");
@@ -1167,22 +1713,26 @@ function ajustarEspacioInferior() {
     const soltar = () => {
         if (!arrastrando) return;
         arrastrando = false;
-        localStorage.setItem('altura_comanda_negrita', listaEl.offsetHeight);
+        try { localStorage.setItem('altura_comanda_negrita', listaEl.offsetHeight); } catch (e) {}
     };
     handle.addEventListener('pointerup', soltar);
     handle.addEventListener('pointercancel', soltar);
     handle.addEventListener('dblclick', () => {
         aplicarAlturaLista(ALTURA_LISTA_DEFECTO);
-        localStorage.setItem('altura_comanda_negrita', ALTURA_LISTA_DEFECTO);
+        try { localStorage.setItem('altura_comanda_negrita', ALTURA_LISTA_DEFECTO); } catch (e) {}
     });
 
     new ResizeObserver(ajustarEspacioInferior).observe(panelEl);
     window.addEventListener('resize', () => aplicarAlturaLista(listaEl.offsetHeight));
 })();
 
-// Arranque inicial
-filtrarCategoria('tacos');
+// ==================== ARRANQUE INICIAL ====================
+filtrarCategoria(categoriaActual);
 renderComanda();
+actualizarIndicadorSync();
+if (colaPendientes.length > 0) {
+    procesarColaPendientes(false);
+}
 </script>
 </body>
 </html>
