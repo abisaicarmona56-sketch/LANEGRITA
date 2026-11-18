@@ -336,7 +336,7 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
             <div class="modal-header">Corte de caja (Global)</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
         </div>
-        <p id="corteSubtitulo" style="font-size:.85rem;color:#0B8770;font-weight:600;margin-bottom:8px;">Consultando Google Sheets...</p>
+        <p id="corteSubtitulo" style="font-size:.85rem;color:#0B8770;font-weight:600;margin-bottom:8px;">Consultando...</p>
         <div class="corte-fila"><span>💵 Efectivo ventas</span><strong id="corteEfectivo">$0.00</strong></div>
         <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
         <div class="corte-fila"><span>🏦 Transferencia</span><strong id="corteTransferencia">$0.00</strong></div>
@@ -352,13 +352,13 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
 
 <script>
 // ==================== CONFIGURACIÓN PRINCIPAL ====================
+// Impresora de tickets y comandas (igual que en la versión anterior)
 const SERVIDOR_IMPRESION = "http://192.168.100.5:8080/imprimir";
-const URL_GOOGLE_SHEETS = "https://script.google.com/macros/s/AKfycbyx-V-fqzqivhswyPp9DSdSQ2eCmHzb_OpAi_wm4_eu8DuMATL4afLgdeAdnlnvpXe5PQ/exec";
+// Servidor de sincronización (Node + Socket.IO). Google Sheets se conecta SOLO desde el servidor.
 const SERVIDOR_SYNC = "http://192.168.100.5:3001";
-const CLAVE_CORTE = "1821";
-const API_TOKEN_SHEETS = "NEGRITA_POS_2026_SECURE_KEY";
-const FETCH_TIMEOUT_MS = 15000;
-const INTERVALO_REINTENTO_MS = 30000;
+const TIMEOUT_ACK_MS = 8000;
+const TIMEOUT_COBRO_MS = 15000;
+const TIMEOUT_CORTE_MS = 45000;
 
 const MESAS_VALIDAS = [
     "Mesa 1", "Mesa 2", "Mesa 3", "Mesa 4", "Mesa 5", "Mesa 6", "Mesa 7",
@@ -429,7 +429,72 @@ const PRODUCTOS = [
     { id: 603, cat: 'promos', nombre: 'Promo: Torta Especial + Refresco', sub: 'Miércoles y Jueves', precio: 115, esComida: true, llevaCarne: false, llevaRefresco: true, esPromo: true }
 ];
 
-// ==================== UTILIDADES SEGURAS ====================
+// ==================== REGLAS DE MESA (idénticas en server.js) ====================
+function aplicarOp(m, op) {
+    if (!m || !Array.isArray(m.items)) return { ok: false, error: 'Mesa inválida' };
+    if (!op || typeof op !== 'object') return { ok: false, error: 'Operación inválida' };
+    const items = m.items;
+    const idx = (id) => items.findIndex(i => i.id === id);
+    const ids = Array.isArray(op.itemIds) ? op.itemIds.map(String) : [];
+    switch (op.tipo) {
+        case 'agregar': {
+            const it = op.item || {};
+            const id = typeof it.id === 'string' ? it.id : '';
+            const nombre = typeof it.nombre === 'string' ? it.nombre.trim().slice(0, 120) : '';
+            const precio = Number(it.precio);
+            const cant = parseInt(it.cant, 10);
+            const persona = parseInt(it.persona, 10) || 1;
+            if (!id || !nombre || !isFinite(precio) || precio < 0 || !(cant >= 1 && cant <= 999) || persona < 1 || persona > 50) {
+                return { ok: false, error: 'Producto inválido' };
+            }
+            if (idx(id) > -1) return { ok: true, sinCambio: true };
+            items.push({ id, nombre, precio, cant, notas: String(it.notas || '').slice(0, 300), persona, impreso: false, listo: false, entregado: false });
+            if (persona > (m.personas || 1)) m.personas = persona;
+            return { ok: true };
+        }
+        case 'cantidad': {
+            const k = idx(op.itemId);
+            const delta = parseInt(op.delta, 10);
+            if (k < 0) return { ok: true, sinCambio: true };
+            if (!delta || Math.abs(delta) > 99) return { ok: false, error: 'Cantidad inválida' };
+            if (items[k].impreso) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina; ya no se puede cambiar.` };
+            items[k].cant += delta;
+            if (items[k].cant <= 0) items.splice(k, 1);
+            return { ok: true };
+        }
+        case 'eliminar': {
+            const k = idx(op.itemId);
+            if (k < 0) return { ok: true, sinCambio: true };
+            if (items[k].impreso) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina; ya no se puede quitar.` };
+            items.splice(k, 1);
+            return { ok: true };
+        }
+        case 'impreso':
+        case 'listo':
+        case 'entregado': {
+            if (!ids.length) return { ok: false, error: 'No se indicaron productos' };
+            items.forEach(i => { if (ids.includes(i.id)) i[op.tipo] = true; });
+            return { ok: true };
+        }
+        case 'personas': {
+            const total = parseInt(op.total, 10);
+            if (!(total >= 1 && total <= 50)) return { ok: false, error: 'Número de personas inválido' };
+            const usado = items.reduce((a, i) => Math.max(a, i.persona || 1), 1);
+            if (total < usado) return { ok: false, error: `La Persona ${usado} todavía tiene productos.` };
+            m.personas = total;
+            return { ok: true };
+        }
+        case 'liberar': {
+            m.items = items.filter(i => !ids.includes(i.id));
+            if (!m.items.length) m.personas = 1;
+            return { ok: true };
+        }
+        default:
+            return { ok: false, error: 'Operación desconocida' };
+    }
+}
+
+// ==================== UTILIDADES ====================
 function escaparHTML(str) {
     if (str === null || str === undefined) return "";
     return String(str)
@@ -441,10 +506,8 @@ function escaparHTML(str) {
 }
 
 function generarUUID() {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
-    }
-    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 }
 
 function leerLS(clave, defecto) {
@@ -454,82 +517,64 @@ function leerLS(clave, defecto) {
         const parsed = JSON.parse(raw);
         return parsed === null ? defecto : parsed;
     } catch (e) {
-        console.warn("Error leyendo localStorage (" + clave + "):", e);
         return defecto;
     }
 }
 
 function escribirLS(clave, valor) {
     try {
-        localStorage.setItem(clave, JSON.stringify(valor));
+        localStorage.setItem(clave, typeof valor === 'string' ? valor : JSON.stringify(valor));
         document.getElementById("storageBanner").style.display = "none";
         return true;
     } catch (e) {
-        console.error("Error guardando en localStorage (" + clave + "):", e);
         document.getElementById("storageBanner").style.display = "block";
         return false;
     }
 }
 
-function dinero(n) {
-    return '$' + Number(n || 0).toFixed(2);
+const dinero = (n) => '$' + Number(n || 0).toFixed(2);
+const clonar = (o) => JSON.parse(JSON.stringify(o));
+const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+function fechaTicket(iso) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? new Date().toLocaleString('es-MX') : d.toLocaleString('es-MX');
 }
 
-async function fetchConTimeout(url, opciones = {}, timeoutMs = FETCH_TIMEOUT_MS) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await fetch(url, { ...opciones, signal: controller.signal });
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-async function postAppsScript(payloadObj) {
-    const bodyStr = JSON.stringify({ ...payloadObj, token: API_TOKEN_SHEETS });
-    const res = await fetchConTimeout(URL_GOOGLE_SHEETS, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: bodyStr
-    });
-    if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-    }
-    const text = await res.text();
-    let data;
-    try {
-        data = JSON.parse(text);
-    } catch (e) {
-        throw new Error("Respuesta no válida de Google Sheets");
-    }
-    if (data.status !== "ok") {
-        const e = new Error(data.message || "Error reportado por Google Sheets");
-        // Error de datos (no transitorio): reintentar no ayuda y bloquearía toda la cola
-        e.rechazo = !/token|lock|timeout|tiempo|busy|ocupad/i.test(e.message);
-        throw e;
-    }
-    return data;
-}
-
-// ==================== ESTADO INICIAL DESDE LOCALSTORAGE ====================
-const cuentasVacias = () => {
-    const obj = {};
-    MESAS_VALIDAS.forEach(m => { obj[m] = []; });
-    return obj;
+// ==================== ESTADO LOCAL ====================
+// servidor: última copia confirmada por el servidor (se guarda para verla sin conexión)
+// outbox:   cambios hechos en este dispositivo que el servidor aún no confirma
+const LS = {
+    servidor: 'lnv2_servidor',
+    outbox: 'lnv2_outbox',
+    persona: 'lnv2_persona_actual',
+    corte: 'lnv2_id_corte_pendiente',
+    mesa: 'mesa_actual_negrita',
+    categoria: 'categoria_actual_negrita',
+    taquero: 'modo_taquero_negrita',
+    filtro: 'filtro_taquero_negrita',
+    altura: 'altura_comanda_negrita'
 };
 
-let cuentasMesas = Object.assign(cuentasVacias(), leerLS('cuentas_negrita', {}));
-let personasMesas = leerLS('personas_negrita', {});
-let metaMesas = leerLS('meta_mesas_negrita', {});
-let colaPendientes = leerLS('cola_sheets_negrita', []);
-let rechazados = leerLS('cola_rechazados_negrita', []);
-let gastosLocales = leerLS('gastos_turno_negrita', []);
-let mesaActual = localStorage.getItem('mesa_actual_negrita') || "Mesa 1";
-if (!MESAS_VALIDAS.includes(mesaActual)) mesaActual = "Mesa 1";
-let categoriaActual = localStorage.getItem('categoria_actual_negrita') || "tacos";
+const mesaVacia = () => ({ items: [], personas: 1, version: 0, ops: [] });
+let servidor = leerLS(LS.servidor, { instancia: null, mesas: {} });
+if (!servidor || typeof servidor.mesas !== 'object') servidor = { instancia: null, mesas: {} };
+MESAS_VALIDAS.forEach(m => { if (!servidor.mesas[m]) servidor.mesas[m] = mesaVacia(); });
+let outbox = leerLS(LS.outbox, []);
+if (!Array.isArray(outbox)) outbox = [];
+let personaActual = leerLS(LS.persona, {});
 
+let mesaActual = localStorage.getItem(LS.mesa) || "Mesa 1";
+if (!MESAS_VALIDAS.includes(mesaActual)) mesaActual = "Mesa 1";
+let categoriaActual = localStorage.getItem(LS.categoria) || "tacos";
+let modoTaqueroActivo = localStorage.getItem(LS.taquero) === 'true';
+let filtroTaquero = localStorage.getItem(LS.filtro) || 'todos';
+
+let estadoSheets = { pendientes: 0, ultimoError: '' };
+let claveEncargado = null;      // solo en memoria, después de validarla con el servidor
 let destinoClave = "corte";
+let modoBotonCorte = null;      // 'reintentar' | 'confirmar' | null
 let corteEstimadoActual = null;
+let ventaMostrada = null;
 let productoSeleccionado = null;
 let productoRefresco = null;
 let opcionVerduraSeleccionada = "Con todo";
@@ -537,17 +582,227 @@ let huaracheOpciones = { salsa: "Salsa Verde", cebolla: "Con cebolla", queso: "C
 let refrescoPromoSeleccionado = null;
 let pesoSeleccionado = { texto: "1/2 Kg", precio: 225 };
 let cobroEnCurso = false;
-let sincronizandoCola = false;
-let ultimoErrorSync = "";
+let outboxOcupado = false;
 
-// ==================== VISTA TAQUERO, COBRO EXITOSO Y LIBERACIONES ====================
-const MARCA_LISTO = '\u2063L\u2063'; // marca invisible: el servidor actual la conserva dentro de "notas"
-const esListo = (it) => Boolean(it && (it.listo || String(it.notas || '').includes(MARCA_LISTO)));
-const limpiarNotas = (n) => String(n || '').split(MARCA_LISTO).join('');
-let modoTaqueroActivo = localStorage.getItem('modo_taquero_negrita') === 'true';
-let filtroTaquero = localStorage.getItem('filtro_taquero_negrita') || 'todos';
-let liberacionesPend = leerLS('liberaciones_pendientes_negrita', []);
+const guardarServidor = () => escribirLS(LS.servidor, servidor);
+function guardarOutbox() { escribirLS(LS.outbox, outbox); actualizarIndicadorSync(); }
 
+// Lo que se ve en pantalla = copia del servidor + cambios locales aún sin confirmar
+function vistaMesa(mesa) {
+    const base = servidor.mesas[mesa] || mesaVacia();
+    const v = clonar({ items: base.items || [], personas: base.personas || 1 });
+    const yaAplicadas = new Set(base.ops || []);
+    outbox.forEach(op => { if (op.mesa === mesa && !yaAplicadas.has(op.opId)) aplicarOp(v, op); });
+    return v;
+}
+
+const personaDeItem = (item) => item.persona || 1;
+const totalPersonas = (v) => Math.max(1, v.personas || 1, ...v.items.map(personaDeItem));
+function personaSeleccionada(mesa, v) {
+    const a = parseInt(personaActual[mesa], 10) || 1;
+    return Math.min(Math.max(a, 1), totalPersonas(v || vistaMesa(mesa)));
+}
+function setPersonaSeleccionada(mesa, n) {
+    personaActual[mesa] = n;
+    escribirLS(LS.persona, personaActual);
+}
+
+function adoptarMesa(mesa, snap) {
+    if (!snap || !MESAS_VALIDAS.includes(mesa)) return;
+    const local = servidor.mesas[mesa];
+    if (!local || (snap.version || 0) >= (local.version || 0)) {
+        servidor.mesas[mesa] = { items: snap.items || [], personas: snap.personas || 1, version: snap.version || 0, ops: snap.ops || [] };
+        const aplicadas = new Set(snap.ops || []);
+        const antes = outbox.length;
+        outbox = outbox.filter(o => !(o.mesa === mesa && aplicadas.has(o.opId)));
+        if (outbox.length !== antes) guardarOutbox();
+        guardarServidor();
+    }
+}
+
+// Crea un cambio, lo muestra al instante y lo manda al servidor (o lo guarda si no hay conexión)
+function encolarOp(tipo, mesa, datos) {
+    const op = { opId: generarUUID(), tipo, mesa, creadoEn: Date.now(), ...datos };
+    const prueba = aplicarOp(vistaMesa(mesa), op);
+    if (!prueba.ok) { alert(prueba.error); return false; }
+    outbox.push(op);
+    guardarOutbox();
+    renderTodo();
+    procesarOutbox();
+    return true;
+}
+
+// ==================== CONEXIÓN CON EL SERVIDOR ====================
+const socket = (typeof io === 'function')
+    ? io(SERVIDOR_SYNC, { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000, timeout: 8000 })
+    : null;
+const conectado = () => Boolean(socket && socket.connected);
+
+function pedir(evento, datos, ms = TIMEOUT_ACK_MS) {
+    return new Promise(resolve => {
+        if (!conectado()) return resolve({ ok: false, sinConexion: true, error: 'Sin conexión con el servidor de sincronización' });
+        socket.timeout(ms).emit(evento, datos, (err, r) => {
+            if (err) resolve({ ok: false, timeout: true, error: 'El servidor no respondió a tiempo' });
+            else resolve(r || { ok: false, error: 'Respuesta vacía del servidor' });
+        });
+    });
+}
+
+async function procesarOutbox() {
+    if (outboxOcupado || !conectado()) return;
+    outboxOcupado = true;
+    actualizarIndicadorSync();
+    const avisos = [];
+    try {
+        while (outbox.length && conectado()) {
+            const op = outbox[0];
+            const r = await pedir('op', op);
+            if (r.timeout || r.sinConexion) break; // se reintenta solo; el servidor ignora repetidos
+            outbox = outbox.filter(o => o.opId !== op.opId);
+            guardarOutbox();
+            if (r.mesa) adoptarMesa(op.mesa, r.mesa);
+            if (!r.ok) avisos.push(`• ${op.mesa}: ${r.error}`);
+        }
+    } finally {
+        outboxOcupado = false;
+        renderTodo();
+    }
+    if (avisos.length) alert('⚠️ Algunos cambios no se aplicaron porque la mesa cambió en otro dispositivo:\n\n' + avisos.join('\n'));
+}
+
+async function vaciarOutbox(maxMs = 8000) {
+    const fin = Date.now() + maxMs;
+    while (outbox.length && conectado() && Date.now() < fin) {
+        if (!outboxOcupado) await procesarOutbox();
+        else await dormir(200);
+    }
+    return outbox.length === 0;
+}
+
+function actualizarBadgeWS(ok) {
+    const el = document.getElementById("wsBadge");
+    el.style.color = ok ? "#2ecc71" : "#e74c3c";
+    el.title = ok ? "Conectado al servidor local" : "Sin conexión al servidor local";
+}
+
+function actualizarIndicadorSync() {
+    const pill = document.getElementById("syncStatusPill");
+    pill.classList.remove("pendiente", "error");
+    if (!conectado()) {
+        pill.classList.add("error");
+        pill.innerText = outbox.length ? `🔴 Sin servidor · ${outbox.length} cambio(s) guardados aquí` : "🔴 Sin servidor";
+    } else if (outbox.length) {
+        pill.classList.add("pendiente");
+        pill.innerText = `⏳ Enviando ${outbox.length} cambio(s)...`;
+    } else if (estadoSheets.pendientes > 0) {
+        pill.classList.add(estadoSheets.ultimoError ? "error" : "pendiente");
+        pill.innerText = `⚠️ ${estadoSheets.pendientes} registro(s) por subir a Sheets`;
+    } else {
+        pill.innerText = "✅ Todo sincronizado";
+    }
+}
+
+async function forzarSincronizacionCola() {
+    if (!conectado()) {
+        alert("🔴 No hay conexión con el servidor de sincronización (laptop).\nLos cambios de este dispositivo están guardados y se enviarán al reconectar.");
+        return;
+    }
+    await vaciarOutbox();
+    const r = await pedir('forzar_sheets', {}, TIMEOUT_CORTE_MS);
+    if (!r.ok) { alert("⚠️ " + r.error); return; }
+    estadoSheets = r;
+    actualizarIndicadorSync();
+    if (outbox.length) alert(`⏳ Aún hay ${outbox.length} cambio(s) de este dispositivo por llegar al servidor.`);
+    else if (r.pendientes === 0) alert("✅ Todo sincronizado: mesas al día y Google Sheets al corriente.");
+    else alert(`⚠️ El servidor tiene ${r.pendientes} registro(s) sin subir a Google Sheets.\nMotivo: ${r.ultimoError || 'desconocido'}\nSe siguen reintentando solos.`);
+}
+
+// Ventas/gastos que quedaron sin enviar en la cola del POS anterior: se pasan al servidor
+async function migrarColaAntigua() {
+    let vieja = leerLS('cola_sheets_negrita', []);
+    if (!Array.isArray(vieja) || !vieja.length) return;
+    const limpiar = (n) => String(n || '').split('⁣L⁣').join('');
+    for (const reg of [...vieja]) {
+        if (!conectado()) return;
+        const payload = { ...(reg.payload || {}) };
+        if (Array.isArray(payload.productos)) payload.productos = payload.productos.map(p => ({ ...p, notas: limpiar(p.notas) }));
+        const r = await pedir('legado', { registro: { tipo: reg.tipo, payload } });
+        if (r.timeout || r.sinConexion) return;
+        if (r.ok) {
+            vieja = vieja.filter(x => x.id !== reg.id);
+            escribirLS('cola_sheets_negrita', vieja);
+        }
+    }
+}
+
+if (socket) {
+    socket.on('connect', () => {
+        actualizarBadgeWS(true);
+        actualizarIndicadorSync();
+        migrarColaAntigua();
+    });
+
+    socket.on('disconnect', () => {
+        actualizarBadgeWS(false);
+        actualizarIndicadorSync();
+    });
+
+    socket.on('estado', (d) => {
+        if (!d || !d.mesas) return;
+        if (d.instancia !== servidor.instancia) {
+            // Servidor nuevo o reiniciado desde cero: manda lo que él tenga
+            servidor = { instancia: d.instancia, mesas: {} };
+            MESAS_VALIDAS.forEach(m => { servidor.mesas[m] = d.mesas[m] || mesaVacia(); });
+            guardarServidor();
+        } else {
+            MESAS_VALIDAS.forEach(m => adoptarMesa(m, d.mesas[m]));
+        }
+        if (d.sheets) estadoSheets = d.sheets;
+        renderTodo();
+        procesarOutbox();
+    });
+
+    socket.on('mesa', (d) => {
+        if (!d || !d.mesa) return;
+        adoptarMesa(d.mesa, d.data);
+        renderTodo();
+    });
+
+    socket.on('sheets', (s) => {
+        if (s) estadoSheets = s;
+        actualizarIndicadorSync();
+    });
+
+    socket.on('venta_confirmada', (d) => {
+        if (!d || !ventaMostrada || ventaMostrada.idVenta !== d.idVenta) return;
+        if (document.getElementById('modalCobroExitoso').style.display === 'flex') {
+            mostrarConfirmacionCobro({ ...ventaMostrada, folio: d.folio, oficial: true });
+        }
+    });
+
+    socket.on('aviso', (d) => { if (d && d.mensaje) alert(d.mensaje); });
+
+    socket.on('gastos_actualizados', () => {
+        if (document.getElementById("modalGasto").style.display === "flex") cargarGastos();
+    });
+} else {
+    console.warn("No se pudo cargar Socket.IO: el indicador mostrará 'Sin servidor' y los cambios se guardan en este dispositivo.");
+}
+
+window.addEventListener('online', () => procesarOutbox());
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { renderTodo(); procesarOutbox(); }
+});
+setInterval(() => { if (outbox.length && conectado()) procesarOutbox(); }, 5000);
+
+// ==================== RENDER GENERAL ====================
+function renderTodo() {
+    if (modoTaqueroActivo) renderVistaTaquero();
+    else renderComanda();
+    actualizarIndicadorSync();
+}
+
+// ==================== VISTA TAQUERO ====================
 function esItemComida(it) {
     const n = String(it.nombre || '').trim();
     if (n.startsWith('Carnitas (')) return true;
@@ -556,15 +811,15 @@ function esItemComida(it) {
     return p ? Boolean(p.esComida) : true;
 }
 
-// El taquero solo ve lo que el mesero mandó a cocina y aún no está listo ni entregado
+// El taquero solo ve lo que se mandó a cocina y aún no está listo ni entregado
 function pendientesCocina(mesa) {
-    const l = (cuentasMesas[mesa] || []).filter(i => i.impreso && !esListo(i) && !i.entregado);
+    const l = vistaMesa(mesa).items.filter(i => i.impreso && !i.listo && !i.entregado);
     return filtroTaquero === 'comida' ? l.filter(esItemComida) : l;
 }
 
 function alternarVistaTaquero(forzar = null) {
     modoTaqueroActivo = forzar !== null ? Boolean(forzar) : !modoTaqueroActivo;
-    try { localStorage.setItem('modo_taquero_negrita', modoTaqueroActivo); } catch (e) {}
+    escribirLS(LS.taquero, String(modoTaqueroActivo));
     document.getElementById('vistaPos').style.display = modoTaqueroActivo ? 'none' : 'block';
     document.getElementById('vistaTaquero').style.display = modoTaqueroActivo ? 'block' : 'none';
     const b = document.getElementById('btnVistaTaquero');
@@ -576,21 +831,16 @@ function alternarVistaTaquero(forzar = null) {
 
 function setFiltroTaquero(f) {
     filtroTaquero = f;
-    try { localStorage.setItem('filtro_taquero_negrita', f); } catch (e) {}
+    escribirLS(LS.filtro, f);
     document.getElementById('filtroKdsTodos').classList.toggle('active', f === 'todos');
     document.getElementById('filtroKdsComida').classList.toggle('active', f === 'comida');
     renderVistaTaquero();
 }
 
-// Marca "listo" SOLO lo que el taquero está viendo (respeta el filtro)
 function marcarListoDesdeTaquero(mesa) {
     const visibles = pendientesCocina(mesa);
     if (!visibles.length) return;
-    visibles.forEach(i => { i.listo = true; i.notas = MARCA_LISTO + limpiarNotas(i.notas); });
-    marcarSucia(mesa);
-    persistirEstadoMesas();
-    if (socket.connected) socket.emit('actualizar_mesa', { mesa, items: cuentasMesas[mesa], personas: infoPersonasDeMesa(mesa) });
-    if (mesaActual === mesa) renderComanda();
+    encolarOp('listo', mesa, { itemIds: visibles.map(i => i.id) });
 }
 
 function renderVistaTaquero() {
@@ -602,10 +852,8 @@ function renderVistaTaquero() {
         const n = pend.reduce((a, i) => a + i.cant, 0);
         mesasN++; pzas += n;
         const grupos = agruparPorPersona(pend).map(g => `<div><span class="kds-persona">👤 Persona ${g.persona}</span>` +
-            g.items.map(it => {
-                const nt = limpiarNotas(it.notas);
-                return `<div class="kds-item"><div class="kds-cant">${it.cant}</div><div><div class="kds-nombre">${escaparHTML(it.nombre)}</div>${nt ? `<div class="kds-notas">${escaparHTML(nt)}</div>` : ''}</div></div>`;
-            }).join('') + '</div>').join('');
+            g.items.map(it => `<div class="kds-item"><div class="kds-cant">${it.cant}</div><div><div class="kds-nombre">${escaparHTML(it.nombre)}</div>${it.notas ? `<div class="kds-notas">${escaparHTML(it.notas)}</div>` : ''}</div></div>`).join('') +
+            '</div>').join('');
         return `<div class="kds-card"><div class="kds-head"><span>${escaparHTML(mesa)}</span><span>${n} pza(s)</span></div><div class="kds-body">${grupos}</div><button type="button" class="btn-kds-listo" onclick="marcarListoDesdeTaquero('${escaparHTML(mesa)}')">✓ Marcar ${escaparHTML(mesa)} lista para llevar</button></div>`;
     }).filter(Boolean);
     document.getElementById('taqueroResumen').innerText = mesasN ? `${mesasN} mesa(s) · ${pzas} producto(s) por sacar` : 'Sin comandas pendientes';
@@ -613,373 +861,10 @@ function renderVistaTaquero() {
         '<div class="kds-vacio"><div style="font-size:2.5rem">🌮✨</div><h3>Todo al día en plancha</h3><p>Las órdenes mandadas por los meseros aparecerán aquí.</p></div>';
 }
 
-function mostrarConfirmacionCobro(mesa, metodo, total, folio, enNube) {
-    document.getElementById('exitoCobroMonto').innerText = dinero(total);
-    document.getElementById('exitoCobroDetalle').innerHTML =
-        `<div><strong>Mesa:</strong> ${escaparHTML(mesa)}</div><div><strong>Método:</strong> ${escaparHTML(metodo)}</div>` +
-        `<div style="margin-top:4px;font-weight:700;color:${enNube ? '#1e8449' : '#d35400'}">${enNube ? '✅ Guardado en Google Sheets' : '⏳ Guardado en este dispositivo, se subirá al volver el internet'} (${escaparHTML(folio)})</div>`;
-    document.getElementById('modalCobroExitoso').style.display = 'flex';
-}
-
-// Cobros/liberaciones: se reenvían hasta que el servidor confirme, y quitan SOLO lo cobrado
-function enviarLiberacion(mesa, motivo, cobrados) {
-    const reg = { mesa, motivo, cobrados, creadoEn: Date.now() };
-    liberacionesPend.push(reg);
-    escribirLS('liberaciones_pendientes_negrita', liberacionesPend);
-    if (socket.connected) socket.emit('liberar_mesa', reg);
-}
-
-function enviarLiberacionesPendientes() {
-    liberacionesPend = liberacionesPend.filter(l => Date.now() - l.creadoEn < 12 * 3600 * 1000);
-    escribirLS('liberaciones_pendientes_negrita', liberacionesPend);
-    if (!socket.connected) return;
-    liberacionesPend.forEach(l => socket.emit('liberar_mesa', l));
-}
-
-function normItems(arr) {
-    return (Array.isArray(arr) ? arr : []).map(it => ({
-        ...it,
-        impreso: Boolean(it.impreso),
-        entregado: Boolean(it.entregado),
-        listo: esListo(it)
-    }));
-}
-
-function marcarSucia(mesa) {
-    if (!metaMesas[mesa]) metaMesas[mesa] = { actualizadoEn: 0, dirty: false, seq: 0 };
-    metaMesas[mesa].actualizadoEn = Date.now();
-    metaMesas[mesa].seq = (metaMesas[mesa].seq || 0) + 1;
-    metaMesas[mesa].dirty = true;
-}
-
-MESAS_VALIDAS.forEach(m => {
-    cuentasMesas[m] = normItems(cuentasMesas[m]);
-    if (!metaMesas[m]) {
-        metaMesas[m] = { actualizadoEn: 0, dirty: false, seq: 0 };
-    }
-});
-
-document.getElementById("selectMesa").value = mesaActual;
-
-// ==================== PERSISTENCIA LOCAL CENTRALIZADA ====================
-function persistirEstadoMesas() {
-    escribirLS('cuentas_negrita', cuentasMesas);
-    escribirLS('personas_negrita', personasMesas);
-    escribirLS('meta_mesas_negrita', metaMesas);
-    try {
-        localStorage.setItem('mesa_actual_negrita', mesaActual);
-        localStorage.setItem('categoria_actual_negrita', categoriaActual);
-    } catch (e) {
-        document.getElementById("storageBanner").style.display = "block";
-    }
-    renderVistaTaquero();
-}
-
-function guardarColaPendientes() {
-    escribirLS('cola_sheets_negrita', colaPendientes);
-    actualizarIndicadorSync();
-}
-
-function guardarGastosLocales() {
-    escribirLS('gastos_turno_negrita', gastosLocales);
-}
-
-function actualizarIndicadorSync() {
-    const pill = document.getElementById("syncStatusPill");
-    const ventasPend = colaPendientes.filter(x => x.tipo === "VENTA").length;
-    const gastosPend = colaPendientes.filter(x => x.tipo === "GASTO").length;
-    const totalPend = colaPendientes.length;
-
-    pill.classList.remove("pendiente", "error");
-    if (sincronizandoCola) {
-        pill.classList.add("pendiente");
-        pill.innerText = `⏳ Enviando (${totalPend})...`;
-        return;
-    }
-    if (totalPend === 0) {
-        pill.innerText = "✅ Todo sincronizado";
-    } else {
-        pill.classList.add(ultimoErrorSync ? "error" : "pendiente");
-        const partes = [];
-        if (ventasPend > 0) partes.push(`${ventasPend} venta(s)`);
-        if (gastosPend > 0) partes.push(`${gastosPend} gasto(s)`);
-        pill.innerText = `⚠️ ${partes.join(" y ")} sin enviar a Sheets`;
-    }
-}
-
-// ==================== SOCKET.IO Y SINCRONIZACIÓN DE MESAS ====================
-const socket = (typeof io === 'function')
-    ? io(SERVIDOR_SYNC, { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 })
-    : { connected: false, id: null, on() {}, emit() {} };
-
-// Cada escritura viaja con la versión de la mesa sobre la que se trabajó (el servidor nuevo rechaza las viejas)
-const EVENTOS_ESCRITURA = ['actualizar_mesa', 'marcar_entregado', 'liberar_mesa'];
-const emitirOriginal = socket.emit.bind(socket);
-socket.emit = function (evento, datos, ...resto) {
-    if (EVENTOS_ESCRITURA.includes(evento) && datos && typeof datos === 'object' && datos.mesa) {
-        const m = metaMesas[datos.mesa] || {};
-        datos = { ...datos, seq: m.seq || 0 };
-        if (typeof m.version === 'number') datos.baseVersion = m.version;
-    }
-    return emitirOriginal(evento, datos, ...resto);
-};
-
-function actualizarBadgeWS(conectado) {
-    const el = document.getElementById("wsBadge");
-    el.style.color = conectado ? "#2ecc71" : "#e74c3c";
-    el.title = conectado ? "Conectado al servidor local" : "Sin conexión al servidor local";
-}
-
-function adoptarServidor(mesa, items, personas, ts, version) {
-    const prev = metaMesas[mesa] || {};
-    cuentasMesas[mesa] = normItems(items);
-    if (personas) {
-        // La persona seleccionada es de cada dispositivo: se conserva la local
-        const total = Math.max(1, parseInt(personas.total, 10) || 1);
-        const loc = personasMesas[mesa];
-        const actual = Math.min(total, Math.max(1, (loc && parseInt(loc.actual, 10)) || parseInt(personas.actual, 10) || 1));
-        personasMesas[mesa] = { total, actual };
-    }
-    metaMesas[mesa] = {
-        actualizadoEn: ts || Date.now(),
-        dirty: false,
-        seq: prev.seq || 0,
-        version: (typeof version === 'number') ? version : prev.version
-    };
-}
-
-function sincronizarMesasSuciasConServidor() {
-    if (!socket.connected) return;
-    MESAS_VALIDAS.forEach(mesa => {
-        if (liberacionesPend.some(l => l.mesa === mesa)) return;
-        if (metaMesas[mesa] && metaMesas[mesa].dirty) {
-            const items = cuentasMesas[mesa] || [];
-            socket.emit('actualizar_mesa', {
-                mesa,
-                items,
-                personas: infoPersonasDeMesa(mesa),
-                actualizadoEn: metaMesas[mesa].actualizadoEn || Date.now()
-            });
-        }
-    });
-    enviarLiberacionesPendientes();
-}
-
-socket.on('connect', () => {
-    actualizarBadgeWS(true);
-    sincronizarMesasSuciasConServidor();
-});
-
-socket.on('disconnect', () => {
-    actualizarBadgeWS(false);
-});
-
-socket.on('estado_inicial', (db) => {
-    if (!db || !db.cuentas) return;
-    MESAS_VALIDAS.forEach(mesa => {
-        if (liberacionesPend.some(l => l.mesa === mesa)) return;
-        const srvObj = db.cuentas[mesa];
-        const srvItems = Array.isArray(srvObj) ? srvObj : (srvObj && Array.isArray(srvObj.items) ? srvObj.items : []);
-        const srvTs = (db.timestamps && typeof db.timestamps[mesa] === "number")
-            ? db.timestamps[mesa]
-            : ((srvObj && typeof srvObj.actualizadoEn === "number") ? srvObj.actualizadoEn : 0);
-        const srvPersonas = (db.personas && db.personas[mesa]) ? db.personas[mesa] : { total: 1, actual: 1 };
-
-        const srvVer = (srvObj && !Array.isArray(srvObj) && typeof srvObj.version === 'number') ? srvObj.version : undefined;
-        const localMeta = metaMesas[mesa] || { actualizadoEn: 0, dirty: false, seq: 0 };
-
-        // Con servidor versionado, el servidor decide (acepta o rechaza); con el viejo, manda el reloj
-        if (localMeta.dirty && (srvVer !== undefined || localMeta.actualizadoEn > srvTs)) {
-            socket.emit('actualizar_mesa', {
-                mesa,
-                items: cuentasMesas[mesa] || [],
-                personas: infoPersonasDeMesa(mesa),
-                actualizadoEn: localMeta.actualizadoEn
-            });
-        } else {
-            adoptarServidor(mesa, srvItems, srvPersonas, srvTs, srvVer);
-        }
-    });
-    enviarLiberacionesPendientes();
-    persistirEstadoMesas();
-    renderComanda();
-});
-
-socket.on('mesa_actualizada', (d) => {
-    if (!d || !d.mesa || !MESAS_VALIDAS.includes(d.mesa)) return;
-    const mesa = d.mesa;
-    const srvTs = typeof d.actualizadoEn === "number" ? d.actualizadoEn : Date.now();
-    const srvItems = Array.isArray(d.items) ? d.items : [];
-    if (!metaMesas[mesa]) metaMesas[mesa] = { actualizadoEn: 0, dirty: false, seq: 0 };
-    const meta = metaMesas[mesa];
-    const propio = Boolean(d.origen) && d.origen === socket.id;
-
-    if (propio) {
-        if (d.evento === 'liberar') {
-            const k = liberacionesPend.findIndex(l => l.mesa === mesa);
-            if (k > -1) { liberacionesPend.splice(k, 1); escribirLS('liberaciones_pendientes_negrita', liberacionesPend); }
-            if (typeof d.version === 'number') meta.version = d.version;
-            const local = cuentasMesas[mesa] || [];
-            if (meta.dirty && local.length) {
-                // Se agregó algo en este dispositivo después del cobro: se respeta y se reenvía
-                socket.emit('actualizar_mesa', { mesa, items: local, personas: infoPersonasDeMesa(mesa), actualizadoEn: meta.actualizadoEn });
-                persistirEstadoMesas();
-                return;
-            }
-            const idsLocales = new Set(local.map(i => String(i.idTemp)));
-            const nuevos = srvItems.filter(i => !idsLocales.has(String(i.idTemp)));
-            adoptarServidor(mesa, srvItems, d.personas, srvTs, d.version);
-            persistirEstadoMesas();
-            if (mesaActual === mesa) renderComanda();
-            if (nuevos.length) {
-                alert(`⚠️ ${mesa}: se cobró, pero quedaron productos NUEVOS sin cobrar (otro mesero los agregó):\n` +
-                    nuevos.map(i => `• ${i.cant} x ${i.nombre}`).join('\n'));
-            }
-            return;
-        }
-        // Eco de una escritura propia: solo se confirma la versión; no se reemplaza la lista local
-        if (typeof d.version === 'number') meta.version = d.version;
-        if (d.seq === undefined || d.seq === meta.seq) meta.dirty = false;
-        persistirEstadoMesas();
-        return;
-    }
-
-    // Cambio de otro dispositivo: si aquí hay cambios sin confirmar, no se pisan (el servidor decidirá)
-    if (meta.dirty) return;
-    if (d.origen === undefined && srvTs < meta.actualizadoEn) return; // servidor antiguo: manda el reloj
-
-    adoptarServidor(mesa, srvItems, d.personas, srvTs, d.version);
-    persistirEstadoMesas();
-    if (mesaActual === mesa) renderComanda();
-});
-
-socket.on('mesa_rechazada', (d) => {
-    if (!d || !d.mesa || !MESAS_VALIDAS.includes(d.mesa)) return;
-    const mesa = d.mesa;
-    const srvItems = Array.isArray(d.items) ? d.items : [];
-    const idsSrv = new Set(srvItems.map(i => String(i.idTemp)));
-    const perdidos = (cuentasMesas[mesa] || []).filter(i => !idsSrv.has(String(i.idTemp)));
-    adoptarServidor(mesa, srvItems, d.personas, d.actualizadoEn || Date.now(), d.version);
-    persistirEstadoMesas();
-    if (mesaActual === mesa) renderComanda();
-    let msg = `⚠️ ${mesa} cambió en otro dispositivo (por ejemplo, ya se cobró o la editó otro mesero). Se actualizó con lo que hay en el servidor.`;
-    if (perdidos.length) {
-        msg += `\n\nEstos productos de tu pantalla ya NO están en la mesa:\n` +
-            perdidos.map(i => `• ${i.cant} x ${i.nombre}`).join('\n') +
-            `\n\nSi todavía hay que servirlos, vuelve a agregarlos.`;
-    }
-    alert(msg);
-});
-
-socket.on('personas_actualizadas', (data) => {
-    if (!data || !data.mesa || !MESAS_VALIDAS.includes(data.mesa) || !data.personas) return;
-    // Solo cambia el total de personas; la persona seleccionada es de cada dispositivo
-    const total = Math.max(1, parseInt(data.personas.total, 10) || 1);
-    const loc = personasMesas[data.mesa] || { total: 1, actual: 1 };
-    personasMesas[data.mesa] = { total, actual: Math.min(total, Math.max(1, parseInt(loc.actual, 10) || 1)) };
-    persistirEstadoMesas();
-    if (mesaActual === data.mesa) {
-        renderPersonas();
-        renderComanda();
-    }
-});
-
-// ==================== COLA DE SINCRONIZACIÓN CON GOOGLE SHEETS ====================
-async function procesarColaPendientes(mostrarAlertaManual = false) {
-    if (sincronizandoCola) return;
-    if (colaPendientes.length === 0) {
-        ultimoErrorSync = "";
-        actualizarIndicadorSync();
-        if (mostrarAlertaManual) alert("✅ Todo está sincronizado con Google Sheets.");
-        return;
-    }
-
-    sincronizandoCola = true;
-    actualizarIndicadorSync();
-
-    let procesados = 0;
-    let errorDetectado = "";
-
-    const snapshot = [...colaPendientes];
-    for (const item of snapshot) {
-        try {
-            const payloadLimpio = (item.tipo === "VENTA" && item.payload && Array.isArray(item.payload.productos))
-                ? {
-                    ...item.payload,
-                    productos: item.payload.productos.map(p => ({ ...p, notas: limpiarNotas(p.notas) }))
-                }
-                : item.payload;
-            const resp = await postAppsScript(payloadLimpio);
-            colaPendientes = colaPendientes.filter(x => x.id !== item.id);
-            guardarColaPendientes();
-            procesados++;
-
-            if (item.tipo === "GASTO") {
-                const gLocal = gastosLocales.find(g => g.idGasto === item.id);
-                if (gLocal) {
-                    gLocal.sincronizado = true;
-                    guardarGastosLocales();
-                }
-            }
-            console.log(`Sincronizado ${item.tipo} (${item.id}):`, resp);
-        } catch (err) {
-            if (err && err.rechazo) {
-                // Sheets rechazó el registro: se aparta para no bloquear el resto, sin borrarlo
-                rechazados.push({ ...item, motivoRechazo: err.message, rechazadoEn: Date.now() });
-                escribirLS('cola_rechazados_negrita', rechazados);
-                colaPendientes = colaPendientes.filter(x => x.id !== item.id);
-                guardarColaPendientes();
-                alert(`❌ Google Sheets RECHAZÓ un registro (${item.tipo}${item.payload && item.payload.mesa ? ' · ' + item.payload.mesa : ''}).\nMotivo: ${err.message}\nSe guardó aparte en este dispositivo (cola_rechazados_negrita). Avisa al encargado.`);
-                continue;
-            }
-            errorDetectado = err.message || "Sin conexión";
-            console.warn(`Fallo sincronizando ${item.tipo} (${item.id}):`, err);
-            break;
-        }
-    }
-
-    sincronizandoCola = false;
-    ultimoErrorSync = errorDetectado;
-    actualizarIndicadorSync();
-    if (document.getElementById("modalGasto").style.display === "flex") {
-        renderListaGastos();
-    }
-
-    if (mostrarAlertaManual) {
-        if (colaPendientes.length === 0) {
-            alert(`✅ Se enviaron ${procesados} registro(s). Todo sincronizado con Google Sheets.`);
-        } else {
-            alert(`⚠️ Enviados: ${procesados}. Aún quedan ${colaPendientes.length} pendiente(s).\nMotivo: ${errorDetectado}`);
-        }
-    }
-}
-
-function forzarSincronizacionCola() {
-    procesarColaPendientes(true);
-}
-
-window.addEventListener('online', () => {
-    procesarColaPendientes(false);
-    sincronizarMesasSuciasConServidor();
-});
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        renderComanda();
-        procesarColaPendientes(false);
-        sincronizarMesasSuciasConServidor();
-    }
-});
-
-setInterval(() => {
-    if (colaPendientes.length > 0 && navigator.onLine !== false) {
-        procesarColaPendientes(false);
-    }
-}, INTERVALO_REINTENTO_MS);
-
-// ==================== CONTRASEÑA COMPARTIDA (CORTE Y GASTOS) ====================
+// ==================== CONTRASEÑA (CORTE Y GASTOS) ====================
 function pedirClave(destino) {
     destinoClave = destino;
+    if (claveEncargado) { abrirDestinoClave(); return; }
     document.getElementById("claveTexto").innerText = destino === "gasto"
         ? "Ingresa la contraseña para registrar gastos:"
         : "Ingresa la contraseña para hacer el corte de caja:";
@@ -994,27 +879,37 @@ function cerrarModalClave() {
     document.getElementById("inputClave").value = "";
 }
 
-function validarClave() {
+function abrirDestinoClave() {
+    if (destinoClave === "gasto") abrirModalGasto();
+    else abrirModalCorte();
+}
+
+async function validarClave() {
     const ingresada = document.getElementById("inputClave").value;
-    if (ingresada === CLAVE_CORTE) {
+    const err = document.getElementById("claveError");
+    const r = await pedir('validar_clave', { clave: ingresada });
+    if (r.ok) {
+        claveEncargado = ingresada;
         cerrarModalClave();
-        if (destinoClave === "gasto") {
-            abrirModalGasto();
-        } else {
-            abrirModalCorte();
-        }
-    } else {
-        document.getElementById("claveError").style.display = "block";
-        document.getElementById("inputClave").value = "";
+        abrirDestinoClave();
+        return;
     }
+    err.innerText = (r.sinConexion || r.timeout) ? "Sin conexión con el servidor de la laptop" : "Contraseña incorrecta";
+    err.style.display = "block";
+    document.getElementById("inputClave").value = "";
+}
+
+function claveRechazada(r) {
+    if (r && r.error === 'Contraseña incorrecta') { claveEncargado = null; return true; }
+    return false;
 }
 
 // ==================== GASTOS ====================
 function abrirModalGasto() {
     document.getElementById("gastoConcepto").value = "";
     document.getElementById("gastoMonto").value = "";
-    renderListaGastos();
     document.getElementById("modalGasto").style.display = "flex";
+    cargarGastos();
     setTimeout(() => document.getElementById("gastoConcepto").focus(), 100);
 }
 
@@ -1022,160 +917,203 @@ function cerrarModalGasto() {
     document.getElementById("modalGasto").style.display = "none";
 }
 
-function renderListaGastos() {
+async function cargarGastos() {
     const contenedor = document.getElementById("listaGastosTurno");
-    if (gastosLocales.length === 0) {
-        contenedor.innerHTML = `<p style="color:#789088;text-align:center;">Sin gastos anotados recientemente en este dispositivo.</p>`;
+    const r = await pedir('gastos_turno', { clave: claveEncargado });
+    if (!r.ok) {
+        if (claveRechazada(r)) { cerrarModalGasto(); pedirClave('gasto'); return; }
+        contenedor.innerHTML = `<p style="color:#c0392b;text-align:center;">${escaparHTML(r.error)}</p>`;
         return;
     }
-    contenedor.innerHTML = `<p style="font-weight:bold;color:#c0392b;margin-bottom:4px;">Últimos gastos anotados aquí:</p>` +
-        gastosLocales.slice().reverse().map(g => {
-            const pend = colaPendientes.some(x => x.id === g.idGasto);
-            const badge = pend ? `<span style="color:#d35400;font-size:.75rem;">⏳ Pendiente</span>` : `<span style="color:#1e8449;font-size:.75rem;">✓ En Sheets</span>`;
-            return `<div class="gasto-item">
-                <span style="flex:1;">${escaparHTML(g.concepto)}<br>${badge}</span>
-                <strong>-${dinero(g.monto)}</strong>
-            </div>`;
-        }).join('');
+    if (!r.gastos.length) {
+        contenedor.innerHTML = `<p style="color:#789088;text-align:center;">Sin gastos en este turno.</p>`;
+        return;
+    }
+    contenedor.innerHTML = `<p style="font-weight:bold;color:#c0392b;margin-bottom:4px;">Gastos del turno (todos los dispositivos):</p>` +
+        r.gastos.slice().reverse().map(g => `<div class="gasto-item">
+            <span style="flex:1;">${escaparHTML(g.concepto)}<br>${g.enSheets
+                ? '<span style="color:#1e8449;font-size:.75rem;">✓ En Sheets</span>'
+                : '<span style="color:#d35400;font-size:.75rem;">⏳ Subiendo a Sheets</span>'}</span>
+            <strong>-${dinero(g.monto)}</strong>
+        </div>`).join('');
 }
 
 async function guardarGasto() {
     const concepto = document.getElementById("gastoConcepto").value.trim();
     const monto = parseFloat(document.getElementById("gastoMonto").value);
-
-    if (!concepto) {
-        alert("Escribe el concepto del gasto.");
-        return;
-    }
-    if (isNaN(monto) || monto <= 0) {
-        alert("Ingresa un monto válido mayor a 0.");
-        return;
-    }
-
-    const idGasto = generarUUID();
-    const fechaHora = new Date().toLocaleString('es-MX');
-    const montoRedondeado = Number(monto.toFixed(2));
-
-    const payloadGasto = {
-        tipo: "GASTO",
-        idGasto: idGasto,
-        fecha: fechaHora,
-        concepto: concepto,
-        monto: montoRedondeado
-    };
-
-    colaPendientes.push({
-        tipo: "GASTO",
-        id: idGasto,
-        payload: payloadGasto,
-        creadoEn: fechaHora
-    });
-    guardarColaPendientes();
-
-    gastosLocales.push({
-        idGasto: idGasto,
-        fecha: fechaHora,
-        concepto: concepto,
-        monto: montoRedondeado,
-        sincronizado: false
-    });
-    guardarGastosLocales();
-
-    document.getElementById("gastoConcepto").value = "";
-    document.getElementById("gastoMonto").value = "";
-    renderListaGastos();
+    if (!concepto) { alert("Escribe el concepto del gasto."); return; }
+    if (isNaN(monto) || monto <= 0) { alert("Ingresa un monto válido mayor a 0."); return; }
 
     const btn = document.getElementById("btnGuardarGasto");
     btn.disabled = true;
-    btn.innerText = "Enviando a Sheets...";
+    btn.innerText = "Guardando...";
+    const datos = { clave: claveEncargado, idGasto: generarUUID(), concepto, monto: Number(monto.toFixed(2)) };
     try {
-        await procesarColaPendientes(false);
-        const siguePendiente = colaPendientes.some(x => x.id === idGasto);
-        if (!siguePendiente) {
-            alert(`✅ Gasto registrado en Google Sheets: ${concepto} (${dinero(montoRedondeado)})`);
-        } else {
-            alert(`⚠️ Gasto guardado en este dispositivo (${dinero(montoRedondeado)}). Se enviará a Sheets al volver el internet.`);
+        let r = await pedir('gasto', datos, 12000);
+        if (r.timeout) r = await pedir('gasto', datos, 12000); // mismo id: no se duplica
+        if (!r.ok) {
+            if (claveRechazada(r)) { cerrarModalGasto(); pedirClave('gasto'); return; }
+            alert("❌ No se guardó el gasto: " + r.error);
+            return;
         }
+        document.getElementById("gastoConcepto").value = "";
+        document.getElementById("gastoMonto").value = "";
+        alert(r.enSheets
+            ? `✅ Gasto registrado en Google Sheets: ${concepto} (${dinero(datos.monto)})`
+            : `✅ Gasto guardado en el servidor (${dinero(datos.monto)}). Se subirá a Sheets en cuanto haya internet.`);
+        cargarGastos();
     } finally {
         btn.disabled = false;
         btn.innerText = "Guardar gasto";
-        renderListaGastos();
     }
+}
+
+// ==================== CORTE DE CAJA GLOBAL ====================
+function ponerCorte(campos) {
+    Object.entries(campos).forEach(([id, txt]) => { document.getElementById(id).innerText = txt; });
+}
+
+async function abrirModalCorte() {
+    corteEstimadoActual = null;
+    modoBotonCorte = null;
+    ponerCorte({ corteEfectivo: '...', corteTarjeta: '...', corteTransferencia: '...', corteTotal: '...', corteGastos: '...', corteEfectivoNeto: '...', corteBalanceFinal: '...' });
+    document.getElementById("corteSubtitulo").innerText = "⏳ Subiendo pendientes y consultando Google Sheets...";
+    document.getElementById("corteAviso").style.display = "none";
+    const bloqueo = document.getElementById("corteBloqueo");
+    bloqueo.style.display = "none";
+    const btn = document.getElementById("btnConfirmarCorte");
+    btn.disabled = true;
+    btn.innerText = "Cargando estimado...";
+    document.getElementById("modalCorte").style.display = "flex";
+
+    await vaciarOutbox();
+    const r = await pedir('corte_estimado', { clave: claveEncargado }, TIMEOUT_CORTE_MS);
+    if (!r.ok) {
+        if (claveRechazada(r)) { cerrarModalCorte(); pedirClave('corte'); return; }
+        document.getElementById("corteSubtitulo").innerText = "❌ No se pudo consultar el corte.";
+        bloqueo.style.display = "block";
+        bloqueo.innerText = "🛑 " + r.error;
+        modoBotonCorte = 'reintentar';
+        btn.disabled = false;
+        btn.innerText = "🔄 Reintentar";
+        return;
+    }
+
+    const s = r.resumen;
+    corteEstimadoActual = s;
+    ponerCorte({
+        corteEfectivo: dinero(s.efectivo),
+        corteTarjeta: dinero(s.tarjeta),
+        corteTransferencia: dinero(s.transferencia),
+        corteTotal: dinero(s.total),
+        corteGastos: '-' + dinero(s.totalGastos),
+        corteEfectivoNeto: dinero(s.efectivoNeto),
+        corteBalanceFinal: dinero(s.balanceFinal)
+    });
+    let sub = s.ordenes === 0 && s.totalGastos === 0
+        ? "ESTIMADO: Aún no hay ventas ni gastos pendientes de corte en Sheets."
+        : `ESTIMADO: ${s.ordenes} orden(es)${s.primeraFecha ? ' desde ' + s.primeraFecha : ''}. Los totales oficiales se calculan al confirmar.`;
+    if (s.metodosNoReconocidos && s.metodosNoReconocidos.length) sub += ` ⚠️ Métodos no reconocidos: ${s.metodosNoReconocidos.join(", ")}`;
+    document.getElementById("corteSubtitulo").innerText = sub;
+
+    const aviso = document.getElementById("corteAviso");
+    const avisos = [];
+    if (r.mesasAbiertas && r.mesasAbiertas.length) avisos.push("⚠️ Hay cuentas abiertas sin cobrar: " + r.mesasAbiertas.join(", ") + ". No se incluyen en el corte.");
+    if (outbox.length) avisos.push(`⚠️ Este dispositivo tiene ${outbox.length} cambio(s) de mesas sin llegar al servidor.`);
+    if (avisos.length) { aviso.style.display = "block"; aviso.innerText = avisos.join("\n"); }
+
+    modoBotonCorte = 'confirmar';
+    btn.disabled = false;
+    btn.innerText = "Hacer corte oficial y cerrar turno";
+}
+
+function cerrarModalCorte() {
+    document.getElementById("modalCorte").style.display = "none";
+}
+
+async function confirmarCorte() {
+    if (modoBotonCorte === 'reintentar') { abrirModalCorte(); return; }
+    if (modoBotonCorte !== 'confirmar') return;
+    if (!confirm("¿Confirmar el corte de caja global? Google Sheets calculará los totales oficiales en este instante y cerrará todas las ventas y gastos abiertos.")) return;
+
+    const btn = document.getElementById("btnConfirmarCorte");
+    btn.disabled = true;
+    btn.innerText = "Cerrando turno en Sheets...";
+
+    let idCorte = localStorage.getItem(LS.corte);
+    if (!idCorte) { idCorte = generarUUID(); escribirLS(LS.corte, idCorte); }
+
+    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte }, TIMEOUT_CORTE_MS);
+    if (!r.ok) {
+        btn.disabled = false;
+        btn.innerText = "Hacer corte oficial y cerrar turno";
+        if (claveRechazada(r)) { cerrarModalCorte(); pedirClave('corte'); return; }
+        alert("❌ No se pudo realizar el corte.\nDetalle: " + r.error + "\nNo se perdió nada: puedes reintentar.");
+        return;
+    }
+    try { localStorage.removeItem(LS.corte); } catch (e) { /* nada */ }
+    cerrarModalCorte();
+
+    const o = r.resumen;
+    if (o.ordenes === 0 && o.totalGastos === 0 && !r.duplicado) {
+        alert("ℹ️ No había ventas ni gastos abiertos en Google Sheets para cerrar (posiblemente otro dispositivo acaba de hacer el corte).");
+        return;
+    }
+    let msg = `✅ CORTE OFICIAL GUARDADO\n` +
+        `Órdenes cerradas: ${o.ordenes}${o.ordenes ? ` (folio ${o.primerFolio} a ${o.ultimoFolio})` : ''}\n` +
+        `Efectivo: ${dinero(o.efectivo)}\n` +
+        `Tarjeta: ${dinero(o.tarjeta)}\n` +
+        `Transferencia: ${dinero(o.transferencia)}\n` +
+        `Total vendido: ${dinero(o.total)}\n` +
+        `Gastos: -${dinero(o.totalGastos)}\n` +
+        `Efectivo neto en caja: ${dinero(o.efectivoNeto)}\n` +
+        `Balance final: ${dinero(o.balanceFinal)}`;
+    if (corteEstimadoActual && (Number(corteEstimadoActual.total) !== Number(o.total) || Number(corteEstimadoActual.totalGastos) !== Number(o.totalGastos))) {
+        msg += `\n\nℹ️ El total oficial difiere del estimado (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`;
+    }
+    if (o.metodosNoReconocidos && o.metodosNoReconocidos.length) {
+        msg += `\n\n⚠️ Hubo ventas con método no reconocido (${o.metodosNoReconocidos.join(", ")}) incluidas en Total vendido.`;
+    }
+    alert(msg);
 }
 
 // ==================== PERSONAS POR MESA ====================
-function personaDeItem(item) {
-    return item.persona || 1;
-}
-
-function infoPersonasDeMesa(mesa) {
-    if (!personasMesas[mesa]) personasMesas[mesa] = { total: 1, actual: 1 };
-    const info = personasMesas[mesa];
-    const cuenta = cuentasMesas[mesa] || [];
-    const maxItem = cuenta.reduce((m, i) => Math.max(m, personaDeItem(i)), 1);
-    if (info.total < maxItem) info.total = maxItem;
-    if (info.actual > info.total) info.actual = info.total;
-    if (info.actual < 1) info.actual = 1;
-    return info;
-}
-
-function infoPersonas() {
-    return infoPersonasDeMesa(mesaActual);
-}
-
-function guardarPersonas() {
-    persistirEstadoMesas();
-    if (socket.connected) {
-        socket.emit('actualizar_personas', {
-            mesa: mesaActual,
-            personas: infoPersonas(),
-            actualizadoEn: metaMesas[mesaActual].actualizadoEn
-        });
-    }
-}
-
-function renderPersonas() {
-    const info = infoPersonas();
-    const cuenta = obtenerMesaActual();
+function renderPersonas(v) {
+    v = v || vistaMesa(mesaActual);
+    const total = totalPersonas(v);
+    const actual = personaSeleccionada(mesaActual, v);
     let html = '';
-    for (let n = 1; n <= info.total; n++) {
-        const cant = cuenta.filter(i => personaDeItem(i) === n).reduce((a, i) => a + i.cant, 0);
-        html += `<button type="button" class="btn-persona ${n === info.actual ? 'active' : ''}" onclick="seleccionarPersona(${n})">👤 Persona ${n}${cant > 0 ? `<span class="badge">${cant}</span>` : ''}</button>`;
+    for (let n = 1; n <= total; n++) {
+        const cant = v.items.filter(i => personaDeItem(i) === n).reduce((a, i) => a + i.cant, 0);
+        html += `<button type="button" class="btn-persona ${n === actual ? 'active' : ''}" onclick="seleccionarPersona(${n})">👤 Persona ${n}${cant > 0 ? `<span class="badge">${cant}</span>` : ''}</button>`;
     }
     html += `<button type="button" class="btn-persona-add" onclick="agregarPersona()">+ Persona</button>`;
-    if (info.total > 1) html += `<button type="button" class="btn-persona-del" onclick="quitarPersona()">− Quitar última</button>`;
+    if (total > 1) html += `<button type="button" class="btn-persona-del" onclick="quitarPersona()">− Quitar última</button>`;
     document.getElementById("personasBar").innerHTML = html;
 }
 
 function seleccionarPersona(n) {
-    infoPersonas().actual = n;
-    guardarPersonas();
-    renderPersonas();
+    setPersonaSeleccionada(mesaActual, n);
     renderComanda();
 }
 
 function agregarPersona() {
-    const info = infoPersonas();
-    info.total += 1;
-    info.actual = info.total;
-    guardarPersonas();
-    renderPersonas();
-    renderComanda();
+    const nuevo = totalPersonas(vistaMesa(mesaActual)) + 1;
+    if (encolarOp('personas', mesaActual, { total: nuevo })) {
+        setPersonaSeleccionada(mesaActual, nuevo);
+        renderComanda();
+    }
 }
 
 function quitarPersona() {
-    const info = infoPersonas();
-    if (info.total <= 1) return;
-    const tieneArticulos = obtenerMesaActual().some(i => personaDeItem(i) === info.total);
-    if (tieneArticulos) {
-        alert(`La Persona ${info.total} ya tiene artículos. Quítalos primero con el botón "-".`);
+    const v = vistaMesa(mesaActual);
+    const total = totalPersonas(v);
+    if (total <= 1) return;
+    if (v.items.some(i => personaDeItem(i) === total)) {
+        alert(`La Persona ${total} ya tiene artículos. Quítalos primero con el botón "-".`);
         return;
     }
-    info.total -= 1;
-    if (info.actual > info.total) info.actual = info.total;
-    guardarPersonas();
-    renderPersonas();
-    renderComanda();
+    encolarOp('personas', mesaActual, { total: total - 1 });
 }
 
 function agruparPorPersona(items) {
@@ -1188,189 +1126,18 @@ function armarOrdenImpresion(items, formatoNombre, conSubtotal) {
     agruparPorPersona(items).forEach(g => {
         const sub = g.items.reduce((a, i) => a + i.cant * i.precio, 0);
         out.push({ cant: "", nombre: `== PERSONA ${g.persona}${conSubtotal ? ' (' + dinero(sub) + ')' : ''} ==`, notas: "" });
-        g.items.forEach(i => out.push({ cant: i.cant, nombre: formatoNombre(i), notas: limpiarNotas(i.notas) }));
+        g.items.forEach(i => out.push({ cant: i.cant, nombre: formatoNombre(i), notas: i.notas || "" }));
     });
     return out;
 }
 
-// ==================== CORTE DE CAJA GLOBAL ====================
-async function abrirModalCorte() {
-    corteEstimadoActual = null;
-    document.getElementById("corteEfectivo").innerText = "...";
-    document.getElementById("corteTarjeta").innerText = "...";
-    document.getElementById("corteTransferencia").innerText = "...";
-    document.getElementById("corteTotal").innerText = "...";
-    document.getElementById("corteGastos").innerText = "...";
-    document.getElementById("corteEfectivoNeto").innerText = "...";
-    document.getElementById("corteBalanceFinal").innerText = "...";
-    document.getElementById("corteSubtitulo").innerText = "⏳ Consultando estimado en Google Sheets...";
-
-    const btnConfirmar = document.getElementById("btnConfirmarCorte");
-    btnConfirmar.disabled = true;
-    btnConfirmar.innerText = "Cargando estimado...";
-
-    const abiertas = MESAS_VALIDAS.filter(m => cuentasMesas[m] && cuentasMesas[m].length > 0);
-    const aviso = document.getElementById("corteAviso");
-    if (abiertas.length > 0) {
-        aviso.style.display = "block";
-        aviso.innerText = "⚠️ Hay cuentas abiertas sin cobrar: " + abiertas.join(", ") + ". No se incluyen en el corte.";
-    } else {
-        aviso.style.display = "none";
-    }
-
-    const bloqueo = document.getElementById("corteBloqueo");
-    if (colaPendientes.length > 0) {
-        bloqueo.style.display = "block";
-        bloqueo.innerText = `🛑 Tienes ${colaPendientes.length} movimiento(s) sin enviar a Google Sheets en este dispositivo. Sincronízalos primero antes de hacer el corte.`;
-    } else {
-        bloqueo.style.display = "none";
-    }
-
-    document.getElementById("modalCorte").style.display = "flex";
-
-    try {
-        const urlGet = `${URL_GOOGLE_SHEETS}?token=${encodeURIComponent(API_TOKEN_SHEETS)}&t=${Date.now()}`;
-        const resp = await fetchConTimeout(urlGet, { method: "GET" });
-        const r = await resp.json();
-        if (r.error || r.status === "error") throw new Error(r.error || r.message);
-
-        corteEstimadoActual = r;
-        document.getElementById("corteEfectivo").innerText = dinero(r.efectivo);
-        document.getElementById("corteTarjeta").innerText = dinero(r.tarjeta);
-        document.getElementById("corteTransferencia").innerText = dinero(r.transferencia);
-        document.getElementById("corteTotal").innerText = dinero(r.total);
-        document.getElementById("corteGastos").innerText = "-" + dinero(r.totalGastos);
-        document.getElementById("corteEfectivoNeto").innerText = dinero(r.efectivoNeto);
-        document.getElementById("corteBalanceFinal").innerText = dinero(r.balanceFinal);
-
-        let sub = r.ordenes === 0 && r.totalGastos === 0
-            ? "ESTIMADO: Aún no hay ventas ni gastos pendientes de corte en Sheets."
-            : `ESTIMADO: ${r.ordenes} orden(es) abiertas${r.primeraFecha ? ' desde ' + r.primeraFecha : ''}. Los totales oficiales se calculan al confirmar.`;
-        if (r.metodosNoReconocidos && r.metodosNoReconocidos.length > 0) {
-            sub += ` ⚠️ Métodos no reconocidos: ${r.metodosNoReconocidos.join(", ")}`;
-        }
-        document.getElementById("corteSubtitulo").innerText = sub;
-
-        if (colaPendientes.length > 0) {
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerText = "🔄 Enviar pendientes primero";
-        } else {
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerText = "Hacer corte oficial y cerrar turno";
-        }
-    } catch (err) {
-        console.error("Error leyendo corte desde Sheets:", err);
-        document.getElementById("corteSubtitulo").innerText = "❌ Error al conectar con Google Sheets: " + (err.message || "Sin conexión");
-        btnConfirmar.innerText = "Sin conexión con Sheets";
-    }
-}
-
-function cerrarModalCorte() {
-    document.getElementById("modalCorte").style.display = "none";
-}
-
-async function confirmarCorte() {
-    if (colaPendientes.length > 0) {
-        await procesarColaPendientes(true);
-        if (colaPendientes.length > 0) {
-            return;
-        }
-        await abrirModalCorte();
-        return;
-    }
-
-    if (!confirm("¿Confirmar el corte de caja global? Google Sheets calculará los totales oficiales en este instante y cerrará todas las ventas y gastos abiertos.")) return;
-
-    const btnConfirmar = document.getElementById("btnConfirmarCorte");
-    btnConfirmar.disabled = true;
-    btnConfirmar.innerText = "Cerrando turno en Sheets...";
-
-    let idCorte = localStorage.getItem('id_corte_pendiente_negrita');
-    if (!idCorte) {
-        idCorte = generarUUID();
-        try { localStorage.setItem('id_corte_pendiente_negrita', idCorte); } catch (e) {}
-    }
-    const payload = {
-        tipo: "CORTE",
-        idCorte: idCorte,
-        fecha: new Date().toLocaleString('es-MX')
-    };
-
-    try {
-        const resp = await postAppsScript(payload);
-        try { localStorage.removeItem('id_corte_pendiente_negrita'); } catch (e) {}
-        const oficial = resp.resumen;
-
-        if (!oficial) {
-            throw new Error("Sheets confirmó pero no devolvió el resumen del corte.");
-        }
-
-        if (oficial.ordenes === 0 && oficial.totalGastos === 0 && !resp.duplicado) {
-            cerrarModalCorte();
-            alert("ℹ️ No había ventas ni gastos abiertos en Google Sheets para cerrar (posiblemente otro dispositivo acaba de hacer el corte).");
-            return;
-        }
-
-        gastosLocales = [];
-        guardarGastosLocales();
-        cerrarModalCorte();
-
-        let msg = `✅ CORTE OFICIAL GUARDADO (${oficial.idCorte || idCorte})\n` +
-            `Órdenes cerradas: ${oficial.ordenes} (${oficial.primerFolio} a ${oficial.ultimoFolio})\n` +
-            `Efectivo: ${dinero(oficial.efectivo)}\n` +
-            `Tarjeta: ${dinero(oficial.tarjeta)}\n` +
-            `Transferencia: ${dinero(oficial.transferencia)}\n` +
-            `Total vendido: ${dinero(oficial.total)}\n` +
-            `Gastos: -${dinero(oficial.totalGastos)}\n` +
-            `Efectivo neto en caja: ${dinero(oficial.efectivoNeto)}\n` +
-            `Balance final: ${dinero(oficial.balanceFinal)}`;
-
-        if (corteEstimadoActual && (
-            Number(corteEstimadoActual.total) !== Number(oficial.total) ||
-            Number(corteEstimadoActual.totalGastos) !== Number(oficial.totalGastos)
-        )) {
-            msg += `\n\nℹ️ Nota: El total oficial (${dinero(oficial.total)}) difiere del estimado previo (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`;
-        }
-
-        if (oficial.metodosNoReconocidos && oficial.metodosNoReconocidos.length > 0) {
-            msg += `\n\n⚠️ Aviso: Hubo ventas con método no reconocido (${oficial.metodosNoReconocidos.join(", ")}) incluidas en Total Vendido.`;
-        }
-
-        alert(msg);
-    } catch (err) {
-        console.error("Error al guardar corte:", err);
-        btnConfirmar.disabled = false;
-        btnConfirmar.innerText = "Hacer corte oficial y cerrar turno";
-        alert("❌ No se pudo realizar el corte.\nDetalle: " + (err.message || "Error de red") + "\nTus datos locales siguen intactos para reintentar.");
-    }
-}
-
-// ==================== CUENTAS Y SINCRONIZACIÓN DE MESAS ====================
-function guardarEnAlmacenamiento() {
-    marcarSucia(mesaActual);
-    persistirEstadoMesas();
-    if (socket.connected) {
-        socket.emit('actualizar_mesa', {
-            mesa: mesaActual,
-            items: obtenerMesaActual(),
-            personas: infoPersonas(),
-            actualizadoEn: metaMesas[mesaActual].actualizadoEn
-        });
-    }
-}
-
-function obtenerMesaActual() {
-    if (!cuentasMesas[mesaActual]) cuentasMesas[mesaActual] = [];
-    return cuentasMesas[mesaActual];
-}
-
+// ==================== MENÚ ====================
 function filtrarCategoria(categoria, e = null) {
     categoriaActual = categoria;
-    persistirEstadoMesas();
+    escribirLS(LS.categoria, categoria);
     document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
-    if (e && e.target) {
-        e.target.classList.add('active');
-    } else {
+    if (e && e.target) e.target.classList.add('active');
+    else {
         const b = document.querySelector(`.btn-tab[data-cat="${categoria}"]`);
         if (b) b.classList.add('active');
     }
@@ -1387,14 +1154,9 @@ function filtrarCategoria(categoria, e = null) {
 function iniciarAgregar(id) {
     const prod = PRODUCTOS.find(p => p.id === id);
     if (!prod) return;
-    if (prod.esRefresco) {
-        abrirModalRefresco(prod);
-    } else if (prod.esComida) {
-        productoSeleccionado = prod;
-        abrirModalOpciones(prod);
-    } else {
-        agregarDirecto(prod.nombre, prod.precio, "");
-    }
+    if (prod.esRefresco) abrirModalRefresco(prod);
+    else if (prod.esComida) { productoSeleccionado = prod; abrirModalOpciones(prod); }
+    else agregarDirecto(prod.nombre, prod.precio, "");
 }
 
 // ==================== REFRESCOS ====================
@@ -1418,16 +1180,12 @@ function elegirRefresco(indice) {
 
 // ==================== OPCIONES DE COMIDA, HUARACHES Y PROMOCIONES ====================
 function abrirModalOpciones(prod) {
-    document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${infoPersonas().actual}`;
+    document.getElementById("modalTitulo").innerText = `${prod.nombre} · Persona ${personaSeleccionada(mesaActual)}`;
     const btnConfirmar = document.getElementById("btnConfirmarOpciones");
 
     const secPeso = document.getElementById("seccionPeso");
-    if (prod.esPorKilo) {
-        secPeso.style.display = "block";
-        setPeso(0.5, '1/2 Kg', 225);
-    } else {
-        secPeso.style.display = "none";
-    }
+    if (prod.esPorKilo) { secPeso.style.display = "block"; setPeso(0.5, '1/2 Kg', 225); }
+    else secPeso.style.display = "none";
 
     const secCarnes = document.getElementById("seccionCarnes");
     const container = document.getElementById("carnesContainer");
@@ -1457,17 +1215,15 @@ function abrirModalOpciones(prod) {
 
     const secRefrescoPromo = document.getElementById("seccionRefrescoPromo");
     const refContainer = document.getElementById("refrescosPromoContainer");
+    refrescoPromoSeleccionado = null;
     if (prod.llevaRefresco) {
         secRefrescoPromo.style.display = "block";
-        refrescoPromoSeleccionado = null;
         btnConfirmar.disabled = true;
         refContainer.innerHTML = SABORES_REFRESCO.map((s, idx) =>
-            `<button type="button" class="btn-refresco" onclick="setRefrescoPromo(${idx}, event)">${escaparHTML(s)}</button>`
-        ).join('');
+            `<button type="button" class="btn-refresco" onclick="setRefrescoPromo(${idx}, event)">${escaparHTML(s)}</button>`).join('');
     } else {
         secRefrescoPromo.style.display = "none";
         refContainer.innerHTML = "";
-        refrescoPromoSeleccionado = null;
         btnConfirmar.disabled = false;
     }
 
@@ -1479,11 +1235,7 @@ function resetHuaracheOpciones() {
     huaracheOpciones = { salsa: "Salsa Verde", cebolla: "Con cebolla", queso: "Con queso" };
     document.querySelectorAll('.btn-huarache-opt').forEach(btn => {
         const val = btn.textContent;
-        if (val.includes("Salsa Verde") || val.includes("Con cebolla") || val.includes("Con queso")) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', val.includes("Salsa Verde") || val.includes("Con cebolla") || val.includes("Con queso"));
     });
 }
 
@@ -1508,9 +1260,8 @@ function cerrarModalOpciones() {
 function setPeso(kilos, etiqueta, precio, e = null) {
     pesoSeleccionado = { texto: etiqueta, precio: precio };
     document.querySelectorAll('.btn-peso').forEach(b => b.classList.remove('active'));
-    if (e && e.target) {
-        e.target.classList.add('active');
-    } else {
+    if (e && e.target) e.target.classList.add('active');
+    else {
         const b = Array.from(document.querySelectorAll('.btn-peso')).find(el => el.textContent.includes(etiqueta));
         if (b) b.classList.add('active');
     }
@@ -1519,17 +1270,9 @@ function setPeso(kilos, etiqueta, precio, e = null) {
 function setVerdura(tipo) {
     opcionVerduraSeleccionada = tipo;
     document.querySelectorAll('.btn-verdura').forEach(b => b.classList.remove('active'));
-    const ids = {
-        'Con todo': 'vTodo',
-        'Con verdura': 'vConVerd',
-        'Pura cebolla': 'vPuraCeb',
-        'Puro cilantro': 'vPuroCil',
-        'Solos': 'vSolos'
-    };
-    if (ids[tipo]) {
-        const el = document.getElementById(ids[tipo]);
-        if (el) el.classList.add('active');
-    }
+    const ids = { 'Con todo': 'vTodo', 'Con verdura': 'vConVerd', 'Pura cebolla': 'vPuraCeb', 'Puro cilantro': 'vPuroCil', 'Solos': 'vSolos' };
+    const el = ids[tipo] && document.getElementById(ids[tipo]);
+    if (el) el.classList.add('active');
 }
 
 function confirmarAgregarConOpciones() {
@@ -1538,35 +1281,22 @@ function confirmarAgregarConOpciones() {
         alert("Selecciona primero el refresco de la promoción.");
         return;
     }
-
     let nombreFinal = productoSeleccionado.nombre;
     let precioFinal = productoSeleccionado.precio;
-
     if (productoSeleccionado.esPorKilo) {
         nombreFinal = `Carnitas (${pesoSeleccionado.texto})`;
         precioFinal = pesoSeleccionado.precio;
     }
-
-    let detalle = [];
+    const detalle = [];
     if (productoSeleccionado.llevaCarne) {
         const checks = Array.from(document.querySelectorAll('input[name="carneCheck"]:checked')).map(c => c.value);
         if (checks.length === 1) detalle.push(checks[0]);
         else if (checks.length > 1) detalle.push("Combinado: " + checks.join('/'));
         else detalle.push("Surtido");
     }
-
-    if (productoSeleccionado.esHuarache) {
-        detalle.push(huaracheOpciones.salsa);
-        detalle.push(huaracheOpciones.cebolla);
-        detalle.push(huaracheOpciones.queso);
-    } else {
-        detalle.push(opcionVerduraSeleccionada);
-    }
-
-    if (productoSeleccionado.llevaRefresco) {
-        detalle.push(`Refresco: ${refrescoPromoSeleccionado}`);
-    }
-
+    if (productoSeleccionado.esHuarache) detalle.push(huaracheOpciones.salsa, huaracheOpciones.cebolla, huaracheOpciones.queso);
+    else detalle.push(opcionVerduraSeleccionada);
+    if (productoSeleccionado.llevaRefresco) detalle.push(`Refresco: ${refrescoPromoSeleccionado}`);
     const notaExtra = document.getElementById("notaExtra").value.trim();
     if (notaExtra) detalle.push(`(${notaExtra})`);
 
@@ -1574,122 +1304,71 @@ function confirmarAgregarConOpciones() {
     cerrarModalOpciones();
 }
 
-// ==================== BANDERAS SEPARADAS (IMPRESO vs ENTREGADO) ====================
+// ==================== COMANDA DE LA MESA ====================
 function agregarDirecto(nombre, precio, notas) {
-    const cuenta = obtenerMesaActual();
-    const persona = infoPersonas().actual;
-    const existente = cuenta.find(item =>
-        item.nombre === nombre &&
-        limpiarNotas(item.notas) === limpiarNotas(notas) &&
-        !item.impreso &&
-        !item.entregado &&
-        personaDeItem(item) === persona
-    );
-    if (existente) {
-        existente.cant += 1;
-    } else {
-        cuenta.push({
-            idTemp: Date.now() + Math.random(),
-            nombre,
-            precio,
-            cant: 1,
-            notas,
-            impreso: false,
-            entregado: false,
-            listo: false,
-            persona
-        });
-    }
-    guardarEnAlmacenamiento();
-    renderComanda();
+    const v = vistaMesa(mesaActual);
+    const persona = personaSeleccionada(mesaActual, v);
+    const existente = v.items.find(i =>
+        i.nombre === nombre && (i.notas || '') === (notas || '') && !i.impreso && !i.entregado && personaDeItem(i) === persona);
+    if (existente) encolarOp('cantidad', mesaActual, { itemId: existente.id, delta: 1 });
+    else encolarOp('agregar', mesaActual, { item: { id: generarUUID(), nombre, precio, cant: 1, notas: notas || '', persona } });
 }
 
-function cambiarCantidad(idTemp, delta) {
-    const cuenta = obtenerMesaActual();
-    const index = cuenta.findIndex(item => item.idTemp === idTemp);
-    if (index > -1) {
-        if (cuenta[index].impreso) return;
-        cuenta[index].cant += delta;
-        if (cuenta[index].cant <= 0) cuenta.splice(index, 1);
-    }
-    guardarEnAlmacenamiento();
-    renderComanda();
+function cambiarCantidad(id, delta) {
+    encolarOp('cantidad', mesaActual, { itemId: id, delta });
 }
 
-function eliminarItemNoImpreso(idTemp) {
-    const cuenta = obtenerMesaActual();
-    const index = cuenta.findIndex(item => item.idTemp === idTemp);
-    if (index > -1 && !cuenta[index].impreso) {
-        cuenta.splice(index, 1);
-        guardarEnAlmacenamiento();
-        renderComanda();
-    }
+function eliminarItemNoImpreso(id) {
+    encolarOp('eliminar', mesaActual, { itemId: id });
 }
 
+// Botón "✓ Entregados": marca todo lo de la mesa como entregado; se puede usar en cada ronda
 function marcarTodoEntregado() {
-    const cuenta = obtenerMesaActual();
-    if (cuenta.length === 0) {
-        alert("No hay productos en esta mesa.");
-        return;
-    }
-    const sinEntregar = cuenta.filter(i => !i.entregado);
-    if (sinEntregar.length === 0) {
-        alert("Todos los productos de esta mesa ya están marcados como entregados.");
-        return;
-    }
-    sinEntregar.forEach(i => { i.entregado = true; });
-
-    marcarSucia(mesaActual);
-    persistirEstadoMesas();
-    if (socket.connected) {
-        socket.emit('marcar_entregado', {
-            mesa: mesaActual,
-            items: cuenta,
-            personas: infoPersonas(),
-            actualizadoEn: metaMesas[mesaActual].actualizadoEn
-        });
-    }
-    renderComanda();
+    const v = vistaMesa(mesaActual);
+    if (!v.items.length) { alert("No hay productos en esta mesa."); return; }
+    const sinEntregar = v.items.filter(i => !i.entregado);
+    if (!sinEntregar.length) { alert("Todos los productos de esta mesa ya están marcados como entregados."); return; }
+    encolarOp('entregado', mesaActual, { itemIds: sinEntregar.map(i => i.id) });
 }
 
 function renderComanda() {
-    const cuenta = obtenerMesaActual();
-    const info = infoPersonas();
+    const v = vistaMesa(mesaActual);
+    const cuenta = v.items;
+    const actual = personaSeleccionada(mesaActual, v);
     const lista = document.getElementById("listaArticulos");
-    const porMandar = cuenta.filter(i => !i.impreso).reduce((acc, i) => acc + i.cant, 0);
-    const porEntregar = cuenta.filter(i => !i.entregado).reduce((acc, i) => acc + i.cant, 0);
-    const totalDinero = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
+    const porMandar = cuenta.filter(i => !i.impreso).reduce((a, i) => a + i.cant, 0);
+    const porEntregar = cuenta.filter(i => !i.entregado).reduce((a, i) => a + i.cant, 0);
+    const totalDinero = cuenta.reduce((a, i) => a + i.cant * i.precio, 0);
 
     document.getElementById("cantPendiente").innerText = `${porMandar} por mandar · ${porEntregar} por entregar`;
-    document.getElementById("montoTotalMesa").innerText = `Total: $${totalDinero.toFixed(2)}`;
-    renderPersonas();
+    document.getElementById("montoTotalMesa").innerText = `Total: ${dinero(totalDinero)}`;
+    renderPersonas(v);
 
-    if (cuenta.length === 0) {
-        lista.innerHTML = `<div style="text-align:center;color:#789088;font-size:.85rem;padding:10px;">Persona ${info.actual}: selecciona productos para armar la comanda</div>`;
+    if (!cuenta.length) {
+        lista.innerHTML = `<div style="text-align:center;color:#789088;font-size:.85rem;padding:10px;">Persona ${actual}: selecciona productos para armar la comanda</div>`;
         return;
     }
 
     lista.innerHTML = agruparPorPersona(cuenta).map(g => {
         const sub = g.items.reduce((a, i) => a + i.cant * i.precio, 0);
         const filas = g.items.map(item => {
-            const claseEstado = item.entregado ? 'entregado' : (esListo(item) ? 'listo' : (item.impreso ? 'en-cocina' : ''));
+            const id = escaparHTML(item.id);
+            const claseEstado = item.entregado ? 'entregado' : (item.listo ? 'listo' : (item.impreso ? 'en-cocina' : ''));
             let badgeEstado = '';
             if (item.entregado) badgeEstado = `<span class="tag-estado tag-entregado">Entregado</span>`;
-            else if (esListo(item)) badgeEstado = `<span class="tag-estado tag-listo">🍳 Listo para llevar</span>`;
+            else if (item.listo) badgeEstado = `<span class="tag-estado tag-listo">🍳 Listo para llevar</span>`;
             else if (item.impreso) badgeEstado = `<span class="tag-estado tag-cocina">✓ Cocina</span>`;
 
-            let controles = '';
+            let controles;
             if (!item.impreso && !item.entregado) {
                 controles = `
-                    <button type="button" class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, -1)">-</button>
+                    <button type="button" class="btn-qty" onclick="cambiarCantidad('${id}', -1)">-</button>
                     <span style="min-width:14px;text-align:center;">${item.cant}</span>
-                    <button type="button" class="btn-qty" onclick="cambiarCantidad(${item.idTemp}, 1)">+</button>
-                `;
+                    <button type="button" class="btn-qty" onclick="cambiarCantidad('${id}', 1)">+</button>`;
             } else if (!item.impreso && item.entregado) {
                 controles = `
-                    <button type="button" class="btn-del-item" title="Quitar artículo" onclick="eliminarItemNoImpreso(${item.idTemp})">✕</button>
-                    <span style="min-width:14px;text-align:center;">${item.cant}</span>
-                `;
+                    <button type="button" class="btn-del-item" title="Quitar artículo" onclick="eliminarItemNoImpreso('${id}')">✕</button>
+                    <span style="min-width:14px;text-align:center;">${item.cant}</span>`;
             } else {
                 controles = `<span style="min-width:14px;text-align:center;">${item.cant}</span>`;
             }
@@ -1698,7 +1377,7 @@ function renderComanda() {
             <div class="item-row ${claseEstado}">
                 <div style="flex:1;">
                     <strong class="item-nombre">${escaparHTML(item.nombre)}</strong>${badgeEstado}
-                    ${limpiarNotas(item.notas) ? `<div style="font-size:.75rem;color:#0B8770;">${escaparHTML(limpiarNotas(item.notas))}</div>` : ''}
+                    ${item.notas ? `<div style="font-size:.75rem;color:#0B8770;">${escaparHTML(item.notas)}</div>` : ''}
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;">
                     ${controles}
@@ -1706,8 +1385,7 @@ function renderComanda() {
                 </div>
             </div>`;
         }).join('');
-
-        return `<div class="persona-grupo-header ${g.persona === info.actual ? 'activa' : ''}">
+        return `<div class="persona-grupo-header ${g.persona === actual ? 'activa' : ''}">
                     <span>👤 Persona ${g.persona}</span><span>${dinero(sub)}</span>
                 </div>${filas}`;
     }).join('');
@@ -1715,18 +1393,15 @@ function renderComanda() {
 
 function cambiarMesa() {
     mesaActual = document.getElementById("selectMesa").value;
-    persistirEstadoMesas();
+    escribirLS(LS.mesa, mesaActual);
     renderComanda();
 }
 
+// ==================== IMPRESIÓN (servidor de impresión, sin cambios de formato) ====================
 async function mandarComanda() {
-    const cuenta = obtenerMesaActual();
     const mesaImpresa = mesaActual;
-    const nuevos = cuenta.filter(i => !i.impreso && !i.entregado);
-    if (nuevos.length === 0) {
-        alert("No hay productos nuevos para enviar a cocina.");
-        return;
-    }
+    const nuevos = vistaMesa(mesaImpresa).items.filter(i => !i.impreso && !i.entregado);
+    if (!nuevos.length) { alert("No hay productos nuevos para enviar a cocina."); return; }
     const payload = {
         tipo: "COMANDA",
         ubicacion: mesaImpresa,
@@ -1734,48 +1409,24 @@ async function mandarComanda() {
         orden: armarOrdenImpresion(nuevos, i => i.nombre, false),
         personas: agruparPorPersona(nuevos).map(g => ({
             persona: g.persona,
-            orden: g.items.map(i => ({ cant: i.cant, nombre: i.nombre, notas: limpiarNotas(i.notas) }))
+            orden: g.items.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas || "" }))
         }))
     };
     try {
-        const res = await fetchConTimeout(SERVIDOR_IMPRESION, {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(SERVIDOR_IMPRESION, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }, 8000);
-        if (res.ok) {
-            // Se marca sobre la lista ACTUAL de esa mesa, usando los ids de lo que se imprimió
-            const ids = new Set(nuevos.map(i => i.idTemp));
-            (cuentasMesas[mesaImpresa] || []).forEach(i => { if (ids.has(i.idTemp)) i.impreso = true; });
-            marcarSucia(mesaImpresa);
-            persistirEstadoMesas();
-            if (socket.connected) {
-                socket.emit('actualizar_mesa', { mesa: mesaImpresa, items: cuentasMesas[mesaImpresa] || [], personas: infoPersonasDeMesa(mesaImpresa) });
-            }
-            renderComanda();
-            alert("¡Ticket enviado a cocina!");
-        } else {
-            alert("Error en el servidor de impresión.");
-        }
+            body: JSON.stringify(payload),
+            signal: ctrl.signal
+        }).finally(() => clearTimeout(t));
+        if (!res.ok) { alert("Error en el servidor de impresión."); return; }
+        encolarOp('impreso', mesaImpresa, { itemIds: nuevos.map(i => i.id) });
+        alert("¡Ticket enviado a cocina!");
     } catch (err) {
         alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
     }
-}
-
-// ==================== COBRO CON CONFIRMACIÓN VISUAL ====================
-function abrirModalCobro() {
-    const cuenta = obtenerMesaActual();
-    if (cuenta.length === 0) {
-        alert("La mesa no tiene consumo registrado.");
-        return;
-    }
-    const total = cuenta.reduce((acc, i) => acc + (i.cant * i.precio), 0);
-    document.getElementById("totalModalCobro").innerText = `$${total.toFixed(2)}`;
-    document.getElementById("modalCobro").style.display = "flex";
-}
-
-function cerrarModalCobro() {
-    document.getElementById("modalCobro").style.display = "none";
 }
 
 function imprimirTicketCuenta(folio, mesaCobrada, metodoPago, fechaHora, cuentaCopia, total) {
@@ -1791,110 +1442,93 @@ function imprimirTicketCuenta(folio, mesaCobrada, metodoPago, fechaHora, cuentaC
             personas: agruparPorPersona(cuentaCopia).map(g => ({
                 persona: g.persona,
                 subtotal: g.items.reduce((a, i) => a + i.cant * i.precio, 0),
-                orden: g.items.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: limpiarNotas(i.notas) }))
+                orden: g.items.map(i => ({ cant: i.cant, nombre: `${i.nombre} ($${i.precio})`, notas: i.notas || "" }))
             })),
             total: total
         })
     }).catch(e => console.warn("No se pudo imprimir ticket final:", e));
 }
 
+// ==================== COBRO ====================
+function abrirModalCobro() {
+    const v = vistaMesa(mesaActual);
+    if (!v.items.length) { alert("La mesa no tiene consumo registrado."); return; }
+    const total = v.items.reduce((a, i) => a + i.cant * i.precio, 0);
+    document.getElementById("totalModalCobro").innerText = dinero(total);
+    document.getElementById("modalCobro").style.display = "flex";
+}
+
+function cerrarModalCobro() {
+    document.getElementById("modalCobro").style.display = "none";
+}
+
+function mostrarConfirmacionCobro(venta) {
+    ventaMostrada = venta;
+    document.getElementById('exitoCobroMonto').innerText = dinero(venta.total);
+    document.getElementById('exitoCobroDetalle').innerHTML =
+        `<div><strong>Mesa:</strong> ${escaparHTML(venta.mesa)}</div><div><strong>Método:</strong> ${escaparHTML(venta.metodoPago)}</div>` +
+        `<div style="margin-top:4px;font-weight:700;color:${venta.oficial ? '#1e8449' : '#d35400'}">` +
+        (venta.oficial ? '✅ Guardado en Google Sheets' : '⏳ Guardado en el servidor, subiendo a Sheets… (si no hay internet se reintenta solo)') +
+        ` (Folio ${escaparHTML(venta.folio)})</div>`;
+    document.getElementById('modalCobroExitoso').style.display = 'flex';
+}
+
 async function procesarPago(metodoPago) {
     if (cobroEnCurso) return;
-    const cuenta = obtenerMesaActual();
-    if (cuenta.length === 0) return;
-
+    const mesaCobrada = mesaActual;
+    if (!conectado()) {
+        alert("🔴 Sin conexión con el servidor de la laptop. No se puede cobrar hasta que vuelva la conexión; la cuenta sigue guardada.");
+        return;
+    }
     cobroEnCurso = true;
     document.querySelectorAll('.btn-metodo').forEach(b => { b.disabled = true; });
-
     try {
-        const mesaCobrada = mesaActual;
-        const cuentaCopia = cuenta.map(i => ({ ...i, notas: limpiarNotas(i.notas) }));
-        const total = Number(cuentaCopia.reduce((acc, i) => acc + (i.cant * i.precio), 0).toFixed(2));
-        const fechaHora = new Date().toLocaleString('es-MX');
-        const idVenta = generarUUID();
-        const folioProvisional = `PEND-${idVenta.slice(-4).toUpperCase()}`;
+        if (!(await vaciarOutbox())) {
+            alert("⏳ Todavía hay cambios de este dispositivo sin llegar al servidor. Espera unos segundos e intenta de nuevo.");
+            return;
+        }
+        const base = servidor.mesas[mesaCobrada];
+        if (!base.items.length) {
+            cerrarModalCobro();
+            renderTodo();
+            alert("La mesa ya no tiene consumo (¿ya la cobraron en otro dispositivo?).");
+            return;
+        }
+        const datos = { opId: generarUUID(), mesa: mesaCobrada, metodoPago, items: base.items.map(i => ({ id: i.id, cant: i.cant })) };
+        let r = await pedir('cobrar', datos, TIMEOUT_COBRO_MS);
+        for (let i = 0; i < 2 && r.timeout; i++) r = await pedir('cobrar', datos, TIMEOUT_COBRO_MS); // mismo id: no se cobra doble
+        if (r.mesa) adoptarMesa(mesaCobrada, r.mesa);
+        renderTodo();
 
-        const payloadVenta = {
-            tipo: "VENTA",
-            idVenta: idVenta,
-            folioProvisional: folioProvisional,
-            fecha: fechaHora,
-            mesa: mesaCobrada,
-            metodoPago: metodoPago,
-            total: total,
-            productos: cuentaCopia.map(i => ({
-                persona: `Persona ${personaDeItem(i)}`,
-                nombre: i.nombre,
-                notas: limpiarNotas(i.notas),
-                cantidad: i.cant,
-                precioUnitario: i.precio,
-                subtotal: Number((i.cant * i.precio).toFixed(2))
-            }))
-        };
+        if (!r.ok) {
+            if (r.timeout || r.sinConexion) {
+                alert("⚠️ No se pudo confirmar el cobro con el servidor. Revisa la mesa: si ya aparece vacía, el cobro SÍ se registró; si no, vuelve a cobrar.");
+            } else {
+                if (r.conflicto) cerrarModalCobro();
+                alert("⚠️ " + r.error);
+            }
+            return;
+        }
 
-        // 1. Guardar venta en la cola local persistente ANTES de limpiar la mesa
-        colaPendientes.push({
-            tipo: "VENTA",
-            id: idVenta,
-            payload: payloadVenta,
-            creadoEn: fechaHora
-        });
-        guardarColaPendientes();
-
-        // 2. Vaciar la mesa localmente y avisar al servidor
-        cuentasMesas[mesaCobrada] = [];
-        personasMesas[mesaCobrada] = { total: 1, actual: 1 };
-        marcarSucia(mesaCobrada);
-        persistirEstadoMesas();
-        enviarLiberacion(mesaCobrada, 'cobro', cuentaCopia.map(i => ({ idTemp: i.idTemp, cant: i.cant })));
         cerrarModalCobro();
-        renderComanda();
-
-        // 3. Esperar máximo 4 segundos a Sheets para obtener el folio oficial antes de imprimir
-        let folioOficial = null;
-        try {
-            sincronizandoCola = true;
-            actualizarIndicadorSync();
-            const promesaSheets = postAppsScript(payloadVenta).then(resp => {
-                colaPendientes = colaPendientes.filter(x => x.id !== idVenta);
-                ultimoErrorSync = "";
-                guardarColaPendientes();
-                return resp.folio || null;
-            });
-            promesaSheets.catch(() => {});
-            const timeoutRapido = new Promise(resolve => setTimeout(() => resolve(null), 4000));
-            folioOficial = await Promise.race([promesaSheets, timeoutRapido]);
-        } catch (err) {
-            ultimoErrorSync = err.message || "Sin internet";
-            console.warn("Venta en cola local pendiente de envío:", err);
-        } finally {
-            sincronizandoCola = false;
-            guardarColaPendientes();
-        }
-
-        // 4. Imprimir ticket final con folio oficial si llegó a tiempo, o provisional PEND-
-        imprimirTicketCuenta(folioOficial || folioProvisional, mesaCobrada, metodoPago, fechaHora, cuentaCopia, total);
-
-        if (colaPendientes.length > 0 && !ultimoErrorSync) {
-            procesarColaPendientes(false);
-        }
-
-        // 5. Mostrar confirmación visual de cobro
-        mostrarConfirmacionCobro(mesaCobrada, metodoPago, total, folioOficial || folioProvisional, Boolean(folioOficial));
+        setPersonaSeleccionada(mesaCobrada, 1);
+        renderTodo();
+        imprimirTicketCuenta(r.venta.folio, mesaCobrada, metodoPago, fechaTicket(r.venta.fecha), r.items, r.venta.total);
+        mostrarConfirmacionCobro({ ...r.venta, mesa: mesaCobrada, metodoPago });
     } finally {
         cobroEnCurso = false;
         document.querySelectorAll('.btn-metodo').forEach(b => { b.disabled = false; });
     }
 }
 
+// Botón "Liberar": vacía la mesa sin registrar cobro
 function cerrarMesa() {
-    if (confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) {
-        const cuentasAntes = (cuentasMesas[mesaActual] || []).map(i => ({ ...i }));
-        cuentasMesas[mesaActual] = [];
-        personasMesas[mesaActual] = { total: 1, actual: 1 };
-        marcarSucia(mesaActual);
-        persistirEstadoMesas();
-        enviarLiberacion(mesaActual, 'liberar', cuentasAntes.map(i => ({ idTemp: i.idTemp, cant: i.cant })));
+    const v = vistaMesa(mesaActual);
+    if (!v.items.length && totalPersonas(v) === 1) return;
+    if (!confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) return;
+    if (encolarOp('liberar', mesaActual, { itemIds: v.items.map(i => i.id) })) {
+        if (totalPersonas(vistaMesa(mesaActual)) > 1) encolarOp('personas', mesaActual, { total: 1 });
+        setPersonaSeleccionada(mesaActual, 1);
         renderComanda();
     }
 }
@@ -1918,12 +1552,10 @@ function ajustarEspacioInferior() {
 }
 
 (function iniciarAjusteComanda() {
-    const guardada = parseInt(localStorage.getItem('altura_comanda_negrita') || '0', 10);
+    const guardada = parseInt(localStorage.getItem(LS.altura) || '0', 10);
     aplicarAlturaLista(guardada > 0 ? guardada : ALTURA_LISTA_DEFECTO);
-
     const handle = document.getElementById("resizeHandle");
     let inicioY = 0, inicioH = 0, arrastrando = false;
-
     handle.addEventListener('pointerdown', e => {
         arrastrando = true;
         inicioY = e.clientY;
@@ -1932,34 +1564,30 @@ function ajustarEspacioInferior() {
         e.preventDefault();
     });
     handle.addEventListener('pointermove', e => {
-        if (!arrastrando) return;
-        aplicarAlturaLista(inicioH + (inicioY - e.clientY));
+        if (arrastrando) aplicarAlturaLista(inicioH + (inicioY - e.clientY));
     });
     const soltar = () => {
         if (!arrastrando) return;
         arrastrando = false;
-        try { localStorage.setItem('altura_comanda_negrita', listaEl.offsetHeight); } catch (e) {}
+        escribirLS(LS.altura, String(listaEl.offsetHeight));
     };
     handle.addEventListener('pointerup', soltar);
     handle.addEventListener('pointercancel', soltar);
     handle.addEventListener('dblclick', () => {
         aplicarAlturaLista(ALTURA_LISTA_DEFECTO);
-        try { localStorage.setItem('altura_comanda_negrita', ALTURA_LISTA_DEFECTO); } catch (e) {}
+        escribirLS(LS.altura, String(ALTURA_LISTA_DEFECTO));
     });
-
     new ResizeObserver(ajustarEspacioInferior).observe(panelEl);
     window.addEventListener('resize', () => aplicarAlturaLista(listaEl.offsetHeight));
 })();
 
-// ==================== ARRANQUE INICIAL ====================
+// ==================== ARRANQUE ====================
+document.getElementById("selectMesa").value = mesaActual;
 filtrarCategoria(categoriaActual);
 setFiltroTaquero(filtroTaquero);
 if (modoTaqueroActivo) alternarVistaTaquero(true);
-renderComanda();
-actualizarIndicadorSync();
-if (colaPendientes.length > 0) {
-    procesarColaPendientes(false);
-}
+actualizarBadgeWS(conectado());
+renderTodo();
 </script>
 </body>
 </html>
