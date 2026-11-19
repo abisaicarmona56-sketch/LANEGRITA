@@ -346,7 +346,8 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
         <div class="corte-fila total"><span>Balance final</span><span id="corteBalanceFinal">$0.00</span></div>
         <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
         <div id="corteBloqueo" class="corte-bloqueo" style="display:none;"></div>
-        <button type="button" id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
+        <button type="button" id="btnImprimirCorte" class="modal-btn-confirm" style="margin-top:16px;background:#e67e22;" onclick="imprimirTicketCorte()" disabled>🖨️ Imprimir ticket</button>
+        <button type="button" id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:10px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
     </div>
 </div>
 
@@ -574,6 +575,7 @@ let claveEncargado = null;      // solo en memoria, después de validarla con el
 let destinoClave = "corte";
 let modoBotonCorte = null;      // 'reintentar' | 'confirmar' | null
 let corteEstimadoActual = null;
+let corteParaImprimir = null;   // { resumen, oficial, fecha } lo que imprime el botón "Imprimir ticket"
 let ventaMostrada = null;
 let productoSeleccionado = null;
 let productoRefresco = null;
@@ -973,9 +975,76 @@ function ponerCorte(campos) {
     Object.entries(campos).forEach(([id, txt]) => { document.getElementById(id).innerText = txt; });
 }
 
+function activarImpresionCorte(resumen, oficial) {
+    corteParaImprimir = resumen ? { resumen, oficial, fecha: new Date().toLocaleString('es-MX') } : null;
+    const b = document.getElementById("btnImprimirCorte");
+    b.disabled = !corteParaImprimir;
+    b.innerText = !corteParaImprimir ? "🖨️ Imprimir ticket"
+        : (oficial ? "🖨️ Imprimir ticket de corte oficial" : "🖨️ Imprimir ticket (estimado)");
+}
+
+async function imprimirTicketCorte() {
+    if (!corteParaImprimir) return;
+    const { resumen: o, oficial, fecha } = corteParaImprimir;
+    const linea = (nombre, monto) => ({ cant: "", nombre: `${nombre}: ${monto}`, notas: "" });
+    const orden = [
+        { cant: "", nombre: oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) ==", notas: "" },
+        linea("Ordenes", String(o.ordenes || 0)),
+    ];
+    if (oficial && o.ordenes) orden.push(linea("Folios", `${o.primerFolio} a ${o.ultimoFolio}`));
+    if (!oficial && o.primeraFecha) orden.push(linea("Desde", o.primeraFecha));
+    orden.push(
+        { cant: "", nombre: "-- VENTAS --", notas: "" },
+        linea("Efectivo", dinero(o.efectivo)),
+        linea("Tarjeta", dinero(o.tarjeta)),
+        linea("Transferencia", dinero(o.transferencia)),
+        linea("TOTAL VENDIDO", dinero(o.total)),
+        { cant: "", nombre: "-- CAJA --", notas: "" },
+        linea("Gastos", "-" + dinero(o.totalGastos)),
+        linea("Efectivo neto en caja", dinero(o.efectivoNeto)),
+        linea("BALANCE FINAL", dinero(o.balanceFinal))
+    );
+    if (o.metodosNoReconocidos && o.metodosNoReconocidos.length) {
+        orden.push({ cant: "", nombre: "Metodos no reconocidos: " + o.metodosNoReconocidos.join(", "), notas: "" });
+    }
+
+    const btn = document.getElementById("btnImprimirCorte");
+    const textoAntes = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "Imprimiendo...";
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(SERVIDOR_IMPRESION, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                tipo: "CORTE",
+                numeroOrden: oficial ? "CORTE" : "ESTIMADO",
+                ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
+                fecha,
+                orden,
+                personas: [],
+                resumen: o,
+                oficial,
+                total: o.total
+            }),
+            signal: ctrl.signal
+        }).finally(() => clearTimeout(t));
+        if (!res.ok) alert("❌ Error en el servidor de impresión.");
+        else alert("🖨️ Ticket de corte enviado a la impresora.");
+    } catch (err) {
+        alert("❌ Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = textoAntes;
+    }
+}
+
 async function abrirModalCorte() {
     corteEstimadoActual = null;
     modoBotonCorte = null;
+    activarImpresionCorte(null);
     ponerCorte({ corteEfectivo: '...', corteTarjeta: '...', corteTransferencia: '...', corteTotal: '...', corteGastos: '...', corteEfectivoNeto: '...', corteBalanceFinal: '...' });
     document.getElementById("corteSubtitulo").innerText = "⏳ Subiendo pendientes y consultando Google Sheets...";
     document.getElementById("corteAviso").style.display = "none";
@@ -1022,6 +1091,7 @@ async function abrirModalCorte() {
     if (outbox.length) avisos.push(`⚠️ Este dispositivo tiene ${outbox.length} cambio(s) de mesas sin llegar al servidor.`);
     if (avisos.length) { aviso.style.display = "block"; aviso.innerText = avisos.join("\n"); }
 
+    activarImpresionCorte(s, false);
     modoBotonCorte = 'confirmar';
     btn.disabled = false;
     btn.innerText = "Hacer corte oficial y cerrar turno";
@@ -1032,6 +1102,7 @@ function cerrarModalCorte() {
 }
 
 async function confirmarCorte() {
+    if (modoBotonCorte === 'cerrar') { cerrarModalCorte(); return; }
     if (modoBotonCorte === 'reintentar') { abrirModalCorte(); return; }
     if (modoBotonCorte !== 'confirmar') return;
     if (!confirm("¿Confirmar el corte de caja global? Google Sheets calculará los totales oficiales en este instante y cerrará todas las ventas y gastos abiertos.")) return;
@@ -1052,29 +1123,42 @@ async function confirmarCorte() {
         return;
     }
     try { localStorage.removeItem(LS.corte); } catch (e) { /* nada */ }
-    cerrarModalCorte();
 
     const o = r.resumen;
     if (o.ordenes === 0 && o.totalGastos === 0 && !r.duplicado) {
+        cerrarModalCorte();
         alert("ℹ️ No había ventas ni gastos abiertos en Google Sheets para cerrar (posiblemente otro dispositivo acaba de hacer el corte).");
         return;
     }
-    let msg = `✅ CORTE OFICIAL GUARDADO\n` +
-        `Órdenes cerradas: ${o.ordenes}${o.ordenes ? ` (folio ${o.primerFolio} a ${o.ultimoFolio})` : ''}\n` +
-        `Efectivo: ${dinero(o.efectivo)}\n` +
-        `Tarjeta: ${dinero(o.tarjeta)}\n` +
-        `Transferencia: ${dinero(o.transferencia)}\n` +
-        `Total vendido: ${dinero(o.total)}\n` +
-        `Gastos: -${dinero(o.totalGastos)}\n` +
-        `Efectivo neto en caja: ${dinero(o.efectivoNeto)}\n` +
-        `Balance final: ${dinero(o.balanceFinal)}`;
+
+    // El modal se queda abierto mostrando los totales OFICIALES para poder imprimir el ticket
+    ponerCorte({
+        corteEfectivo: dinero(o.efectivo),
+        corteTarjeta: dinero(o.tarjeta),
+        corteTransferencia: dinero(o.transferencia),
+        corteTotal: dinero(o.total),
+        corteGastos: '-' + dinero(o.totalGastos),
+        corteEfectivoNeto: dinero(o.efectivoNeto),
+        corteBalanceFinal: dinero(o.balanceFinal)
+    });
+    document.getElementById("corteSubtitulo").innerText =
+        `✅ CORTE OFICIAL GUARDADO · ${o.ordenes} orden(es) cerradas${o.ordenes ? ` (folio ${o.primerFolio} a ${o.ultimoFolio})` : ''}`;
+
+    const avisos = [];
     if (corteEstimadoActual && (Number(corteEstimadoActual.total) !== Number(o.total) || Number(corteEstimadoActual.totalGastos) !== Number(o.totalGastos))) {
-        msg += `\n\nℹ️ El total oficial difiere del estimado (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`;
+        avisos.push(`ℹ️ El total oficial difiere del estimado (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`);
     }
     if (o.metodosNoReconocidos && o.metodosNoReconocidos.length) {
-        msg += `\n\n⚠️ Hubo ventas con método no reconocido (${o.metodosNoReconocidos.join(", ")}) incluidas en Total vendido.`;
+        avisos.push(`⚠️ Hubo ventas con método no reconocido (${o.metodosNoReconocidos.join(", ")}) incluidas en Total vendido.`);
     }
-    alert(msg);
+    const aviso = document.getElementById("corteAviso");
+    aviso.style.display = avisos.length ? "block" : "none";
+    aviso.innerText = avisos.join("\n");
+
+    activarImpresionCorte(o, true);
+    modoBotonCorte = 'cerrar';
+    btn.disabled = false;
+    btn.innerText = "Cerrar";
 }
 
 // ==================== PERSONAS POR MESA ====================
@@ -1397,37 +1481,20 @@ function cambiarMesa() {
     renderComanda();
 }
 
-// ==================== IMPRESIÓN (servidor de impresión, sin cambios de formato) ====================
-async function mandarComanda() {
-    const mesaImpresa = mesaActual;
-    const nuevos = vistaMesa(mesaImpresa).items.filter(i => !i.impreso && !i.entregado);
-    if (!nuevos.length) { alert("No hay productos nuevos para enviar a cocina."); return; }
-    const payload = {
-        tipo: "COMANDA",
-        ubicacion: mesaImpresa,
-        fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        orden: armarOrdenImpresion(nuevos, i => i.nombre, false),
-        personas: agruparPorPersona(nuevos).map(g => ({
-            persona: g.persona,
-            orden: g.items.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas || "" }))
-        }))
-    };
-    try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(SERVIDOR_IMPRESION, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            signal: ctrl.signal
-        }).finally(() => clearTimeout(t));
-        if (!res.ok) { alert("Error en el servidor de impresión."); return; }
-        encolarOp('impreso', mesaImpresa, { itemIds: nuevos.map(i => i.id) });
-        alert("¡Ticket enviado a cocina!");
-    } catch (err) {
-        alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
-    }
+// ==================== COMANDA → PANTALLA DEL TAQUERO (ya NO se imprime) ====================
+// Solo marca los productos como "mandados a cocina"; el servidor lo reparte a la vista Taquero.
+// Si no hay conexión, el cambio queda guardado en este dispositivo y se envía al reconectar.
+function mandarComanda() {
+    const mesaEnviada = mesaActual;
+    const nuevos = vistaMesa(mesaEnviada).items.filter(i => !i.impreso && !i.entregado);
+    if (!nuevos.length) { alert("No hay productos nuevos para enviar al taquero."); return; }
+    if (!encolarOp('impreso', mesaEnviada, { itemIds: nuevos.map(i => i.id) })) return;
+    alert(conectado()
+        ? "🔥 ¡Comanda enviada al taquero!"
+        : "⏳ Sin conexión con la laptop: la comanda quedó guardada en este dispositivo y llegará al taquero en cuanto vuelva la conexión.");
 }
+
+// ==================== IMPRESIÓN (servidor de impresión) ====================
 
 function imprimirTicketCuenta(folio, mesaCobrada, metodoPago, fechaHora, cuentaCopia, total) {
     fetch(SERVIDOR_IMPRESION, {
