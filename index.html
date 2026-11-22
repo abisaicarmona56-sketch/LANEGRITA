@@ -336,6 +336,18 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
             <div class="modal-header">Corte de caja (Global)</div>
             <button type="button" class="btn-close-modal" onclick="cerrarModalCorte()">✖</button>
         </div>
+        <!-- Paso 1: conteo a ciegas (antes de ver lo que dice el sistema) -->
+        <div id="corteConteo">
+            <p style="font-size:.88rem;color:#555;margin-bottom:8px;">Cuenta <strong>todo el efectivo de la caja</strong> (billetes, monedas y el fondo) <strong>antes</strong> de ver los totales del sistema.</p>
+            <p style="font-size:.85rem;color:#555;margin-bottom:2px;">Fondo de caja con el que se abrió ($):</p>
+            <input type="number" id="corteFondo" class="input-clave" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+            <p style="font-size:.85rem;color:#555;margin-bottom:2px;">Efectivo contado en caja ahora ($):</p>
+            <input type="number" id="corteContado" class="input-clave" placeholder="0.00" step="0.01" min="0" inputmode="decimal" onkeydown="if(event.key==='Enter')verCorte()">
+            <button type="button" class="modal-btn-confirm" style="margin-top:8px;" onclick="verCorte()">Ver corte</button>
+        </div>
+
+        <!-- Paso 2: totales del sistema -->
+        <div id="corteResultado" style="display:none;">
         <p id="corteSubtitulo" style="font-size:.85rem;color:#0B8770;font-weight:600;margin-bottom:8px;">Consultando...</p>
         <div class="corte-fila"><span>💵 Efectivo ventas</span><strong id="corteEfectivo">$0.00</strong></div>
         <div class="corte-fila"><span>💳 Tarjeta</span><strong id="corteTarjeta">$0.00</strong></div>
@@ -344,9 +356,25 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
         <div class="corte-fila gasto"><span>💸 Gastos del turno</span><strong id="corteGastos">-$0.00</strong></div>
         <div class="corte-fila"><span>💰 Efectivo neto en caja</span><strong id="corteEfectivoNeto">$0.00</strong></div>
         <div class="corte-fila total"><span>Balance final</span><span id="corteBalanceFinal">$0.00</span></div>
+
+        <div style="margin-top:14px;font-weight:800;color:var(--c4);font-size:.95rem;">🧮 Cuadre de caja</div>
+        <div class="corte-fila"><span>Fondo de caja</span><strong id="corteFondoTxt">$0.00</strong></div>
+        <div class="corte-fila"><span>Debe haber en caja</span><strong id="corteDebeHaber">$0.00</strong></div>
+        <div class="corte-fila"><span>Contado</span><strong id="corteContadoTxt">$0.00</strong></div>
+        <div id="corteDiferenciaBox" class="corte-fila total"><span>Diferencia</span><span id="corteDiferencia">$0.00</span></div>
+
+        <div id="corteLiberaciones" class="corte-bloqueo" style="display:none;"></div>
+
+        <details style="margin-top:12px;font-size:.85rem;">
+            <summary id="corteListaTitulo" style="cursor:pointer;font-weight:700;color:var(--c3);">Ventas en efectivo</summary>
+            <div id="corteListaEfectivo" style="max-height:220px;overflow-y:auto;margin-top:6px;"></div>
+        </details>
+
         <div id="corteAviso" class="corte-aviso" style="display:none;"></div>
+        </div>
         <div id="corteBloqueo" class="corte-bloqueo" style="display:none;"></div>
-        <button type="button" id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:16px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
+        <button type="button" id="btnImprimirCorte" class="modal-btn-confirm" style="margin-top:16px;background:#e67e22;" onclick="imprimirTicketCorte()" disabled>🖨️ Imprimir ticket</button>
+        <button type="button" id="btnConfirmarCorte" class="modal-btn-confirm" style="margin-top:10px;" onclick="confirmarCorte()">Hacer corte y guardar en Sheets</button>
     </div>
 </div>
 
@@ -485,6 +513,9 @@ function aplicarOp(m, op) {
             return { ok: true };
         }
         case 'liberar': {
+            // Lo que ya se mandó al taquero o se entregó solo se puede quitar con contraseña (evento liberar_mesa)
+            const protegido = items.find(i => ids.includes(i.id) && (i.impreso || i.entregado));
+            if (protegido) return { ok: false, error: `"${protegido.nombre}" ya se mandó al taquero o se entregó; para liberar la mesa se necesita la contraseña.` };
             m.items = items.filter(i => !ids.includes(i.id));
             if (!m.items.length) m.personas = 1;
             return { ok: true };
@@ -552,7 +583,8 @@ const LS = {
     categoria: 'categoria_actual_negrita',
     taquero: 'modo_taquero_negrita',
     filtro: 'filtro_taquero_negrita',
-    altura: 'altura_comanda_negrita'
+    altura: 'altura_comanda_negrita',
+    fondo: 'fondo_caja_negrita'
 };
 
 const mesaVacia = () => ({ items: [], personas: 1, version: 0, ops: [] });
@@ -572,8 +604,10 @@ let filtroTaquero = localStorage.getItem(LS.filtro) || 'todos';
 let estadoSheets = { pendientes: 0, ultimoError: '' };
 let claveEncargado = null;      // solo en memoria, después de validarla con el servidor
 let destinoClave = "corte";
+let claveLiberar = null;        // se usa una sola vez y se borra
 let modoBotonCorte = null;      // 'reintentar' | 'confirmar' | null
 let corteEstimadoActual = null;
+let corteParaImprimir = null;   // { resumen, oficial, fecha } lo que imprime el botón "Imprimir ticket"
 let ventaMostrada = null;
 let productoSeleccionado = null;
 let productoRefresco = null;
@@ -864,10 +898,13 @@ function renderVistaTaquero() {
 // ==================== CONTRASEÑA (CORTE Y GASTOS) ====================
 function pedirClave(destino) {
     destinoClave = destino;
-    if (claveEncargado) { abrirDestinoClave(); return; }
+    // Liberar mesa SIEMPRE pide la contraseña (aunque ya se haya escrito antes en este dispositivo)
+    if (claveEncargado && destino !== 'liberar') { abrirDestinoClave(); return; }
     document.getElementById("claveTexto").innerText = destino === "gasto"
         ? "Ingresa la contraseña para registrar gastos:"
-        : "Ingresa la contraseña para hacer el corte de caja:";
+        : destino === "liberar"
+            ? "Esta mesa tiene productos mandados o entregados. Ingresa la contraseña para liberarla SIN cobrar:"
+            : "Ingresa la contraseña para hacer el corte de caja:";
     document.getElementById("inputClave").value = "";
     document.getElementById("claveError").style.display = "none";
     document.getElementById("modalClave").style.display = "flex";
@@ -881,6 +918,7 @@ function cerrarModalClave() {
 
 function abrirDestinoClave() {
     if (destinoClave === "gasto") abrirModalGasto();
+    else if (destinoClave === "liberar") liberarMesaConClave();
     else abrirModalCorte();
 }
 
@@ -889,7 +927,9 @@ async function validarClave() {
     const err = document.getElementById("claveError");
     const r = await pedir('validar_clave', { clave: ingresada });
     if (r.ok) {
-        claveEncargado = ingresada;
+        // La contraseña usada para liberar NO se queda guardada: así un mesero no abre corte/gastos después
+        if (destinoClave === 'liberar') claveLiberar = ingresada;
+        else claveEncargado = ingresada;
         cerrarModalClave();
         abrirDestinoClave();
         return;
@@ -969,22 +1009,194 @@ async function guardarGasto() {
 }
 
 // ==================== CORTE DE CAJA GLOBAL ====================
+// Paso 1: la encargada cuenta el efectivo SIN ver el sistema (conteo a ciegas).
+// Paso 2: se muestran los totales, lo que DEBE haber en caja y la diferencia.
+let corteConteo = null;   // { fondo, contado }
+
 function ponerCorte(campos) {
     Object.entries(campos).forEach(([id, txt]) => { document.getElementById(id).innerText = txt; });
 }
 
-async function abrirModalCorte() {
+function leerMonto(id) {
+    const txt = String(document.getElementById(id).value || '').trim();
+    if (txt === '') return null;
+    const n = Number(txt);
+    return isFinite(n) && n >= 0 ? Number(n.toFixed(2)) : NaN;
+}
+
+// Calcula el cuadre (para el estimado; el oficial lo calcula Google Sheets con la misma fórmula)
+function conCuadre(s, conteo) {
+    const r = { ...s };
+    if (r.fondo === undefined) {
+        r.fondo = conteo ? conteo.fondo : 0;
+        r.contado = conteo ? conteo.contado : null;
+        r.debeHaber = Number((r.fondo + Number(r.efectivoNeto || 0)).toFixed(2));
+        r.diferencia = r.contado === null ? null : Number((r.contado - r.debeHaber).toFixed(2));
+    }
+    return r;
+}
+
+function textoDiferencia(dif) {
+    if (dif === null || dif === undefined) return 'Sin conteo';
+    if (Math.abs(dif) < 0.005) return '✅ Cuadra exacto';
+    return dif < 0 ? `❌ Faltan ${dinero(-dif)}` : `⚠️ Sobran ${dinero(dif)}`;
+}
+
+function mostrarResumenCorte(s) {
+    ponerCorte({
+        corteEfectivo: dinero(s.efectivo),
+        corteTarjeta: dinero(s.tarjeta),
+        corteTransferencia: dinero(s.transferencia),
+        corteTotal: dinero(s.total),
+        corteGastos: '-' + dinero(s.totalGastos),
+        corteEfectivoNeto: dinero(s.efectivoNeto),
+        corteBalanceFinal: dinero(s.balanceFinal),
+        corteFondoTxt: dinero(s.fondo),
+        corteDebeHaber: dinero(s.debeHaber),
+        corteContadoTxt: s.contado === null ? '—' : dinero(s.contado),
+        corteDiferencia: textoDiferencia(s.diferencia)
+    });
+    const box = document.getElementById('corteDiferenciaBox');
+    const dif = s.diferencia;
+    box.style.color = dif === null ? '#555' : (Math.abs(dif) < 0.005 ? '#1e8449' : (dif < 0 ? '#c0392b' : '#d35400'));
+
+    const lib = document.getElementById('corteLiberaciones');
+    if (s.liberaciones) {
+        lib.style.display = 'block';
+        lib.innerHTML = `🚨 Mesas liberadas SIN cobrar: ${s.liberaciones} (${dinero(s.montoLiberado)})` +
+            (s.listaLiberaciones || []).map(l => `<div style="font-weight:400;margin-top:3px;">• ${escaparHTML(l.hora)} ${escaparHTML(l.mesa)} ${dinero(l.monto)} — ${escaparHTML(l.motivo)}</div>`).join('');
+    } else {
+        lib.style.display = 'none';
+    }
+
+    const lista = s.ventasEfectivo || [];
+    document.getElementById('corteListaTitulo').innerText = `📋 Ventas en efectivo: ${s.ordenesEfectivo || lista.length} orden(es) · ${dinero(s.efectivo)} (toca para ver)`;
+    document.getElementById('corteListaEfectivo').innerHTML = lista.length
+        ? lista.map(v => `<div class="gasto-item"><span>Folio ${escaparHTML(v.folio)} · ${escaparHTML(v.hora)} · ${escaparHTML(v.mesa)}</span><strong>${dinero(v.total)}</strong></div>`).join('')
+        : '<p style="color:#789088;">Sin ventas en efectivo.</p>';
+}
+
+function activarImpresionCorte(resumen, oficial) {
+    corteParaImprimir = resumen ? { resumen, oficial, fecha: new Date().toLocaleString('es-MX') } : null;
+    const b = document.getElementById("btnImprimirCorte");
+    b.disabled = !corteParaImprimir;
+    b.innerText = !corteParaImprimir ? "🖨️ Imprimir ticket"
+        : (oficial ? "🖨️ Imprimir ticket de corte oficial" : "🖨️ Imprimir ticket (estimado)");
+}
+
+async function imprimirTicketCorte() {
+    if (!corteParaImprimir) return;
+    const { resumen: o, oficial, fecha } = corteParaImprimir;
+    const txt = (nombre) => ({ cant: "", nombre, notas: "" });
+    const linea = (nombre, monto) => txt(`${nombre}: ${monto}`);
+    const orden = [
+        txt(oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) =="),
+        linea("Ordenes", String(o.ordenes || 0))
+    ];
+    if (oficial && o.ordenes) orden.push(linea("Folios", `${o.primerFolio} a ${o.ultimoFolio}`));
+    if (!oficial && o.primeraFecha) orden.push(linea("Desde", o.primeraFecha));
+    orden.push(
+        txt("-- VENTAS --"),
+        linea("Efectivo", dinero(o.efectivo)),
+        linea("Tarjeta", dinero(o.tarjeta)),
+        linea("Transferencia", dinero(o.transferencia)),
+        linea("TOTAL VENDIDO", dinero(o.total)),
+        txt("-- CAJA --"),
+        linea("Gastos", "-" + dinero(o.totalGastos)),
+        linea("Efectivo neto", dinero(o.efectivoNeto)),
+        linea("BALANCE FINAL", dinero(o.balanceFinal)),
+        txt("-- CUADRE DE CAJA --"),
+        linea("Fondo de caja", dinero(o.fondo)),
+        linea("Debe haber en caja", dinero(o.debeHaber)),
+        linea("Contado", o.contado === null ? "sin conteo" : dinero(o.contado)),
+        linea("DIFERENCIA", textoDiferencia(o.diferencia).replace(/[✅❌⚠️]\s*/g, '').toUpperCase())
+    );
+    if (o.liberaciones) {
+        orden.push(txt(`-- MESAS LIBERADAS SIN COBRO: ${o.liberaciones} (${dinero(o.montoLiberado)}) --`));
+        (o.listaLiberaciones || []).forEach(l => orden.push(txt(`${l.hora} ${l.mesa} ${dinero(l.monto)} - ${l.motivo}`)));
+    }
+    orden.push(txt(`-- VENTAS EN EFECTIVO: ${o.ordenesEfectivo || 0} --`));
+    (o.ventasEfectivo || []).forEach(v => orden.push(txt(`F${v.folio} ${v.hora} ${v.mesa} ${dinero(v.total)}`)));
+    if (o.metodosNoReconocidos && o.metodosNoReconocidos.length) {
+        orden.push(txt("Metodos no reconocidos: " + o.metodosNoReconocidos.join(", ")));
+    }
+
+    const btn = document.getElementById("btnImprimirCorte");
+    const textoAntes = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "Imprimiendo...";
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(SERVIDOR_IMPRESION, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                tipo: "CORTE",
+                numeroOrden: oficial ? "CORTE" : "ESTIMADO",
+                ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
+                fecha,
+                orden,
+                personas: [],
+                resumen: o,
+                oficial,
+                total: o.total
+            }),
+            signal: ctrl.signal
+        }).finally(() => clearTimeout(t));
+        if (!res.ok) alert("❌ Error en el servidor de impresión.");
+        else alert("🖨️ Ticket de corte enviado a la impresora.");
+    } catch (err) {
+        alert("❌ Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = textoAntes;
+    }
+}
+
+function abrirModalCorte() {
+    corteEstimadoActual = null;
+    corteConteo = null;
+    modoBotonCorte = null;
+    activarImpresionCorte(null);
+    document.getElementById("corteConteo").style.display = "block";
+    document.getElementById("corteResultado").style.display = "none";
+    document.getElementById("corteBloqueo").style.display = "none";
+    document.getElementById("corteFondo").value = localStorage.getItem(LS.fondo) || "";
+    document.getElementById("corteContado").value = "";
+    const btn = document.getElementById("btnConfirmarCorte");
+    btn.disabled = true;
+    btn.innerText = "Primero cuenta el efectivo";
+    document.getElementById("modalCorte").style.display = "flex";
+    setTimeout(() => document.getElementById(document.getElementById("corteFondo").value ? "corteContado" : "corteFondo").focus(), 100);
+}
+
+function verCorte() {
+    const fondo = leerMonto("corteFondo");
+    const contado = leerMonto("corteContado");
+    if (Number.isNaN(fondo) || Number.isNaN(contado)) { alert("Revisa las cantidades: solo números mayores o iguales a 0."); return; }
+    if (contado === null) { alert("Escribe cuánto efectivo contaste en la caja."); return; }
+    corteConteo = { fondo: fondo || 0, contado };
+    escribirLS(LS.fondo, String(corteConteo.fondo));
+    document.getElementById("corteConteo").style.display = "none";
+    document.getElementById("corteResultado").style.display = "block";
+    cargarEstimadoCorte();
+}
+
+async function cargarEstimadoCorte() {
     corteEstimadoActual = null;
     modoBotonCorte = null;
-    ponerCorte({ corteEfectivo: '...', corteTarjeta: '...', corteTransferencia: '...', corteTotal: '...', corteGastos: '...', corteEfectivoNeto: '...', corteBalanceFinal: '...' });
+    activarImpresionCorte(null);
+    ponerCorte({ corteEfectivo: '...', corteTarjeta: '...', corteTransferencia: '...', corteTotal: '...', corteGastos: '...', corteEfectivoNeto: '...', corteBalanceFinal: '...',
+        corteFondoTxt: '...', corteDebeHaber: '...', corteContadoTxt: '...', corteDiferencia: '...' });
     document.getElementById("corteSubtitulo").innerText = "⏳ Subiendo pendientes y consultando Google Sheets...";
     document.getElementById("corteAviso").style.display = "none";
+    document.getElementById("corteLiberaciones").style.display = "none";
     const bloqueo = document.getElementById("corteBloqueo");
     bloqueo.style.display = "none";
     const btn = document.getElementById("btnConfirmarCorte");
     btn.disabled = true;
     btn.innerText = "Cargando estimado...";
-    document.getElementById("modalCorte").style.display = "flex";
 
     await vaciarOutbox();
     const r = await pedir('corte_estimado', { clave: claveEncargado }, TIMEOUT_CORTE_MS);
@@ -999,17 +1211,9 @@ async function abrirModalCorte() {
         return;
     }
 
-    const s = r.resumen;
+    const s = conCuadre(r.resumen, corteConteo);
     corteEstimadoActual = s;
-    ponerCorte({
-        corteEfectivo: dinero(s.efectivo),
-        corteTarjeta: dinero(s.tarjeta),
-        corteTransferencia: dinero(s.transferencia),
-        corteTotal: dinero(s.total),
-        corteGastos: '-' + dinero(s.totalGastos),
-        corteEfectivoNeto: dinero(s.efectivoNeto),
-        corteBalanceFinal: dinero(s.balanceFinal)
-    });
+    mostrarResumenCorte(s);
     let sub = s.ordenes === 0 && s.totalGastos === 0
         ? "ESTIMADO: Aún no hay ventas ni gastos pendientes de corte en Sheets."
         : `ESTIMADO: ${s.ordenes} orden(es)${s.primeraFecha ? ' desde ' + s.primeraFecha : ''}. Los totales oficiales se calculan al confirmar.`;
@@ -1022,6 +1226,7 @@ async function abrirModalCorte() {
     if (outbox.length) avisos.push(`⚠️ Este dispositivo tiene ${outbox.length} cambio(s) de mesas sin llegar al servidor.`);
     if (avisos.length) { aviso.style.display = "block"; aviso.innerText = avisos.join("\n"); }
 
+    activarImpresionCorte(s, false);
     modoBotonCorte = 'confirmar';
     btn.disabled = false;
     btn.innerText = "Hacer corte oficial y cerrar turno";
@@ -1032,7 +1237,8 @@ function cerrarModalCorte() {
 }
 
 async function confirmarCorte() {
-    if (modoBotonCorte === 'reintentar') { abrirModalCorte(); return; }
+    if (modoBotonCorte === 'cerrar') { cerrarModalCorte(); return; }
+    if (modoBotonCorte === 'reintentar') { cargarEstimadoCorte(); return; }
     if (modoBotonCorte !== 'confirmar') return;
     if (!confirm("¿Confirmar el corte de caja global? Google Sheets calculará los totales oficiales en este instante y cerrará todas las ventas y gastos abiertos.")) return;
 
@@ -1043,7 +1249,7 @@ async function confirmarCorte() {
     let idCorte = localStorage.getItem(LS.corte);
     if (!idCorte) { idCorte = generarUUID(); escribirLS(LS.corte, idCorte); }
 
-    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte }, TIMEOUT_CORTE_MS);
+    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
         btn.disabled = false;
         btn.innerText = "Hacer corte oficial y cerrar turno";
@@ -1052,29 +1258,40 @@ async function confirmarCorte() {
         return;
     }
     try { localStorage.removeItem(LS.corte); } catch (e) { /* nada */ }
-    cerrarModalCorte();
 
-    const o = r.resumen;
-    if (o.ordenes === 0 && o.totalGastos === 0 && !r.duplicado) {
+    // Compatibilidad: con el server.js ANTERIOR el fondo y lo contado no llegan a Sheets;
+    // se usa el conteo de esta pantalla para mostrar e imprimir el cuadre.
+    const base = { ...r.resumen };
+    if ((base.contado === null || base.contado === undefined) && corteConteo) {
+        delete base.fondo; delete base.contado; delete base.debeHaber; delete base.diferencia;
+    }
+    const o = conCuadre(base, corteConteo);
+    if (o.ordenes === 0 && o.totalGastos === 0 && !o.liberaciones && !r.duplicado) {
+        cerrarModalCorte();
         alert("ℹ️ No había ventas ni gastos abiertos en Google Sheets para cerrar (posiblemente otro dispositivo acaba de hacer el corte).");
         return;
     }
-    let msg = `✅ CORTE OFICIAL GUARDADO\n` +
-        `Órdenes cerradas: ${o.ordenes}${o.ordenes ? ` (folio ${o.primerFolio} a ${o.ultimoFolio})` : ''}\n` +
-        `Efectivo: ${dinero(o.efectivo)}\n` +
-        `Tarjeta: ${dinero(o.tarjeta)}\n` +
-        `Transferencia: ${dinero(o.transferencia)}\n` +
-        `Total vendido: ${dinero(o.total)}\n` +
-        `Gastos: -${dinero(o.totalGastos)}\n` +
-        `Efectivo neto en caja: ${dinero(o.efectivoNeto)}\n` +
-        `Balance final: ${dinero(o.balanceFinal)}`;
+
+    // El modal se queda abierto mostrando los totales OFICIALES para poder imprimir el ticket
+    mostrarResumenCorte(o);
+    document.getElementById("corteSubtitulo").innerText =
+        `✅ CORTE OFICIAL GUARDADO · ${o.ordenes} orden(es) cerradas${o.ordenes ? ` (folio ${o.primerFolio} a ${o.ultimoFolio})` : ''}`;
+
+    const avisos = [];
     if (corteEstimadoActual && (Number(corteEstimadoActual.total) !== Number(o.total) || Number(corteEstimadoActual.totalGastos) !== Number(o.totalGastos))) {
-        msg += `\n\nℹ️ El total oficial difiere del estimado (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`;
+        avisos.push(`ℹ️ El total oficial difiere del estimado (${dinero(corteEstimadoActual.total)}) porque entraron movimientos mientras se revisaba.`);
     }
     if (o.metodosNoReconocidos && o.metodosNoReconocidos.length) {
-        msg += `\n\n⚠️ Hubo ventas con método no reconocido (${o.metodosNoReconocidos.join(", ")}) incluidas en Total vendido.`;
+        avisos.push(`⚠️ Hubo ventas con método no reconocido (${o.metodosNoReconocidos.join(", ")}) incluidas en Total vendido.`);
     }
-    alert(msg);
+    const aviso = document.getElementById("corteAviso");
+    aviso.style.display = avisos.length ? "block" : "none";
+    aviso.innerText = avisos.join("\n");
+
+    activarImpresionCorte(o, true);
+    modoBotonCorte = 'cerrar';
+    btn.disabled = false;
+    btn.innerText = "Cerrar";
 }
 
 // ==================== PERSONAS POR MESA ====================
@@ -1397,37 +1614,20 @@ function cambiarMesa() {
     renderComanda();
 }
 
-// ==================== IMPRESIÓN (servidor de impresión, sin cambios de formato) ====================
-async function mandarComanda() {
-    const mesaImpresa = mesaActual;
-    const nuevos = vistaMesa(mesaImpresa).items.filter(i => !i.impreso && !i.entregado);
-    if (!nuevos.length) { alert("No hay productos nuevos para enviar a cocina."); return; }
-    const payload = {
-        tipo: "COMANDA",
-        ubicacion: mesaImpresa,
-        fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        orden: armarOrdenImpresion(nuevos, i => i.nombre, false),
-        personas: agruparPorPersona(nuevos).map(g => ({
-            persona: g.persona,
-            orden: g.items.map(i => ({ cant: i.cant, nombre: i.nombre, notas: i.notas || "" }))
-        }))
-    };
-    try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(SERVIDOR_IMPRESION, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            signal: ctrl.signal
-        }).finally(() => clearTimeout(t));
-        if (!res.ok) { alert("Error en el servidor de impresión."); return; }
-        encolarOp('impreso', mesaImpresa, { itemIds: nuevos.map(i => i.id) });
-        alert("¡Ticket enviado a cocina!");
-    } catch (err) {
-        alert("Error de conexión: verifica que el servidor de impresión esté encendido en la laptop.");
-    }
+// ==================== COMANDA → PANTALLA DEL TAQUERO (ya NO se imprime) ====================
+// Solo marca los productos como "mandados a cocina"; el servidor lo reparte a la vista Taquero.
+// Si no hay conexión, el cambio queda guardado en este dispositivo y se envía al reconectar.
+function mandarComanda() {
+    const mesaEnviada = mesaActual;
+    const nuevos = vistaMesa(mesaEnviada).items.filter(i => !i.impreso && !i.entregado);
+    if (!nuevos.length) { alert("No hay productos nuevos para enviar al taquero."); return; }
+    if (!encolarOp('impreso', mesaEnviada, { itemIds: nuevos.map(i => i.id) })) return;
+    alert(conectado()
+        ? "🔥 ¡Comanda enviada al taquero!"
+        : "⏳ Sin conexión con la laptop: la comanda quedó guardada en este dispositivo y llegará al taquero en cuanto vuelva la conexión.");
 }
+
+// ==================== IMPRESIÓN (servidor de impresión) ====================
 
 function imprimirTicketCuenta(folio, mesaCobrada, metodoPago, fechaHora, cuentaCopia, total) {
     fetch(SERVIDOR_IMPRESION, {
@@ -1521,16 +1721,67 @@ async function procesarPago(metodoPago) {
     }
 }
 
-// Botón "Liberar": vacía la mesa sin registrar cobro
+// Botón "Liberar": vacía la mesa sin registrar cobro.
+// Si hay productos ya mandados al taquero o entregados, pide contraseña + motivo y queda registrado para el corte.
+let mesaPorLiberar = null;
+
 function cerrarMesa() {
     const v = vistaMesa(mesaActual);
     if (!v.items.length && totalPersonas(v) === 1) return;
+    const protegidos = v.items.filter(i => i.impreso || i.entregado);
+    if (protegidos.length) {
+        mesaPorLiberar = mesaActual;
+        pedirClave('liberar');
+        return;
+    }
     if (!confirm(`¿Deseas vaciar la cuenta de ${mesaActual} sin registrar cobro?`)) return;
     if (encolarOp('liberar', mesaActual, { itemIds: v.items.map(i => i.id) })) {
         if (totalPersonas(vistaMesa(mesaActual)) > 1) encolarOp('personas', mesaActual, { total: 1 });
         setPersonaSeleccionada(mesaActual, 1);
         renderComanda();
     }
+}
+
+async function liberarMesaConClave() {
+    const mesa = mesaPorLiberar;
+    const clave = claveLiberar;
+    mesaPorLiberar = null;
+    claveLiberar = null;
+    if (!mesa || !clave) return;
+    if (!conectado()) { alert("🔴 Sin conexión con la laptop. Para liberar una mesa con productos mandados se necesita conexión."); return; }
+    if (!(await vaciarOutbox())) { alert("⏳ Todavía hay cambios de este dispositivo sin llegar al servidor. Intenta de nuevo en unos segundos."); return; }
+    const base = servidor.mesas[mesa];
+    if (!base || !base.items.length) { renderTodo(); alert("La mesa ya está vacía."); return; }
+    const monto = base.items.reduce((a, i) => a + i.cant * i.precio, 0);
+    const motivo = (prompt(`⚠️ Vas a liberar ${mesa} SIN COBRAR ${dinero(monto)}.\nQuedará registrado en el corte.\n\nEscribe el motivo (ej. "cliente se fue sin pagar", "orden equivocada"):`) || '').trim();
+    if (!motivo) { alert("No se liberó la mesa: el motivo es obligatorio."); return; }
+
+    let r = await pedir('liberar_mesa', {
+        clave, opId: generarUUID(), mesa, motivo,
+        items: base.items.map(i => ({ id: i.id, cant: i.cant }))
+    }, 6000);
+    // Compatibilidad: si la laptop todavía tiene el server.js ANTERIOR, no conoce "liberar_mesa" y nunca contesta.
+    // En ese caso se libera como antes (ya se pidió contraseña y motivo), pero NO queda registrado en Sheets.
+    if (r.timeout && conectado()) {
+        console.warn('Servidor sin liberar_mesa (versión anterior): se libera con la operación normal');
+        r = await pedir('op', { opId: generarUUID(), tipo: 'liberar', mesa, creadoEn: Date.now(), itemIds: base.items.map(i => i.id) });
+        if (r.ok) {
+            r.monto = monto;
+            r.sinRegistro = true;
+        }
+    }
+    if (r.mesa) adoptarMesa(mesa, r.mesa);
+    if (!r.ok) {
+        renderTodo();
+        if (r.error === 'Contraseña incorrecta') { mesaPorLiberar = mesa; pedirClave('liberar'); return; }
+        alert("⚠️ " + r.error);
+        return;
+    }
+    setPersonaSeleccionada(mesa, 1);
+    renderTodo();
+    alert(r.sinRegistro
+        ? `✅ ${mesa} liberada sin cobro (${dinero(r.monto)}).\n⚠️ El servidor de la laptop es la versión anterior: esta liberación NO quedó registrada en Sheets. Anótala a mano: ${mesa}, ${dinero(r.monto)}, motivo: ${motivo}.`
+        : `✅ ${mesa} liberada sin cobro (${dinero(r.monto)}). Quedó registrada para el corte.`);
 }
 
 // ==================== AJUSTE DE ALTURA DE LA COMANDA ====================
