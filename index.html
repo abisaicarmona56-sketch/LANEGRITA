@@ -1132,7 +1132,8 @@ async function imprimirTicketCorte() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                tipo: "CORTE",
+                // Se manda como "CUENTA" porque el programa de impresión solo sabe dar formato a COMANDA y CUENTA
+                tipo: "CUENTA",
                 numeroOrden: oficial ? "CORTE" : "ESTIMADO",
                 ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
                 fecha,
