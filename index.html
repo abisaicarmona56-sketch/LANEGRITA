@@ -148,7 +148,12 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
             <option value="De pie 4">De pie 4</option>
             <option value="De pie 5">De pie 5</option>
             <option value="Barra">Barra</option>
-            <option value="Para Llevar">Para Llevar</option>
+            <option value="Para Llevar 1">Para Llevar 1</option>
+            <option value="Para Llevar 2">Para Llevar 2</option>
+            <option value="Para Llevar 3">Para Llevar 3</option>
+            <option value="Para Llevar 4">Para Llevar 4</option>
+            <option value="Para Llevar 5">Para Llevar 5</option>
+            <option value="Para Llevar 6">Para Llevar 6</option>
         </select>
     </div>
 
@@ -391,7 +396,8 @@ const TIMEOUT_CORTE_MS = 45000;
 const MESAS_VALIDAS = [
     "Mesa 1", "Mesa 2", "Mesa 3", "Mesa 4", "Mesa 5", "Mesa 6", "Mesa 7",
     "De pie 1", "De pie 2", "De pie 3", "De pie 4", "De pie 5",
-    "Barra", "Para Llevar"
+    "Barra",
+    "Para Llevar 1", "Para Llevar 2", "Para Llevar 3", "Para Llevar 4", "Para Llevar 5", "Para Llevar 6"
 ];
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
@@ -485,7 +491,7 @@ function aplicarOp(m, op) {
             const delta = parseInt(op.delta, 10);
             if (k < 0) return { ok: true, sinCambio: true };
             if (!delta || Math.abs(delta) > 99) return { ok: false, error: 'Cantidad inválida' };
-            if (items[k].impreso) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina; ya no se puede cambiar.` };
+            if (items[k].impreso || items[k].entregado) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina o se entregó; ya no se puede cambiar.` };
             items[k].cant += delta;
             if (items[k].cant <= 0) items.splice(k, 1);
             return { ok: true };
@@ -493,7 +499,7 @@ function aplicarOp(m, op) {
         case 'eliminar': {
             const k = idx(op.itemId);
             if (k < 0) return { ok: true, sinCambio: true };
-            if (items[k].impreso) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina; ya no se puede quitar.` };
+            if (items[k].impreso || items[k].entregado) return { ok: false, error: `"${items[k].nombre}" ya se mandó a cocina o se entregó; para quitarlo se necesita la contraseña.` };
             items.splice(k, 1);
             return { ok: true };
         }
@@ -602,7 +608,8 @@ let modoTaqueroActivo = localStorage.getItem(LS.taquero) === 'true';
 let filtroTaquero = localStorage.getItem(LS.filtro) || 'todos';
 
 let estadoSheets = { pendientes: 0, ultimoError: '' };
-let claveEncargado = null;      // solo en memoria, después de validarla con el servidor
+// Solo en memoria, después de validarlas con el servidor. Gastos y corte tienen contraseñas distintas.
+const claves = { gasto: null, corte: null };
 let destinoClave = "corte";
 let claveLiberar = null;        // se usa una sola vez y se borra
 let modoBotonCorte = null;      // 'reintentar' | 'confirmar' | null
@@ -899,12 +906,14 @@ function renderVistaTaquero() {
 function pedirClave(destino) {
     destinoClave = destino;
     // Liberar mesa SIEMPRE pide la contraseña (aunque ya se haya escrito antes en este dispositivo)
-    if (claveEncargado && destino !== 'liberar') { abrirDestinoClave(); return; }
+    if (destino !== 'liberar' && destino !== 'eliminar' && claves[destino]) { abrirDestinoClave(); return; }
     document.getElementById("claveTexto").innerText = destino === "gasto"
         ? "Ingresa la contraseña para registrar gastos:"
         : destino === "liberar"
             ? "Esta mesa tiene productos mandados o entregados. Ingresa la contraseña para liberarla SIN cobrar:"
-            : "Ingresa la contraseña para hacer el corte de caja:";
+            : destino === "eliminar"
+                ? "Este producto ya se mandó o se entregó. Ingresa la contraseña para quitarlo SIN cobrar:"
+                : "Ingresa la contraseña para hacer el corte de caja:";
     document.getElementById("inputClave").value = "";
     document.getElementById("claveError").style.display = "none";
     document.getElementById("modalClave").style.display = "flex";
@@ -919,17 +928,18 @@ function cerrarModalClave() {
 function abrirDestinoClave() {
     if (destinoClave === "gasto") abrirModalGasto();
     else if (destinoClave === "liberar") liberarMesaConClave();
+    else if (destinoClave === "eliminar") quitarProductoConClave();
     else abrirModalCorte();
 }
 
 async function validarClave() {
     const ingresada = document.getElementById("inputClave").value;
     const err = document.getElementById("claveError");
-    const r = await pedir('validar_clave', { clave: ingresada });
+    const r = await pedir('validar_clave', { clave: ingresada, tipo: destinoClave === 'gasto' ? 'gasto' : 'corte' });
     if (r.ok) {
         // La contraseña usada para liberar NO se queda guardada: así un mesero no abre corte/gastos después
-        if (destinoClave === 'liberar') claveLiberar = ingresada;
-        else claveEncargado = ingresada;
+        if (destinoClave === 'liberar' || destinoClave === 'eliminar') claveLiberar = ingresada;
+        else claves[destinoClave] = ingresada;
         cerrarModalClave();
         abrirDestinoClave();
         return;
@@ -940,7 +950,7 @@ async function validarClave() {
 }
 
 function claveRechazada(r) {
-    if (r && r.error === 'Contraseña incorrecta') { claveEncargado = null; return true; }
+    if (r && r.error === 'Contraseña incorrecta') { claves.gasto = null; claves.corte = null; return true; }
     return false;
 }
 
@@ -959,7 +969,7 @@ function cerrarModalGasto() {
 
 async function cargarGastos() {
     const contenedor = document.getElementById("listaGastosTurno");
-    const r = await pedir('gastos_turno', { clave: claveEncargado });
+    const r = await pedir('gastos_turno', { clave: claves.gasto });
     if (!r.ok) {
         if (claveRechazada(r)) { cerrarModalGasto(); pedirClave('gasto'); return; }
         contenedor.innerHTML = `<p style="color:#c0392b;text-align:center;">${escaparHTML(r.error)}</p>`;
@@ -987,7 +997,7 @@ async function guardarGasto() {
     const btn = document.getElementById("btnGuardarGasto");
     btn.disabled = true;
     btn.innerText = "Guardando...";
-    const datos = { clave: claveEncargado, idGasto: generarUUID(), concepto, monto: Number(monto.toFixed(2)) };
+    const datos = { clave: claves.gasto, idGasto: generarUUID(), concepto, monto: Number(monto.toFixed(2)) };
     try {
         let r = await pedir('gasto', datos, 12000);
         if (r.timeout) r = await pedir('gasto', datos, 12000); // mismo id: no se duplica
@@ -1063,7 +1073,7 @@ function mostrarResumenCorte(s) {
     const lib = document.getElementById('corteLiberaciones');
     if (s.liberaciones) {
         lib.style.display = 'block';
-        lib.innerHTML = `🚨 Mesas liberadas SIN cobrar: ${s.liberaciones} (${dinero(s.montoLiberado)})` +
+        lib.innerHTML = `🚨 Liberado o quitado SIN cobrar: ${s.liberaciones} (${dinero(s.montoLiberado)})` +
             (s.listaLiberaciones || []).map(l => `<div style="font-weight:400;margin-top:3px;">• ${escaparHTML(l.hora)} ${escaparHTML(l.mesa)} ${dinero(l.monto)} — ${escaparHTML(l.motivo)}</div>`).join('');
     } else {
         lib.style.display = 'none';
@@ -1112,7 +1122,7 @@ async function imprimirTicketCorte() {
         linea("DIFERENCIA", textoDiferencia(o.diferencia).replace(/[✅❌⚠️]\s*/g, '').toUpperCase())
     );
     if (o.liberaciones) {
-        orden.push(txt(`-- MESAS LIBERADAS SIN COBRO: ${o.liberaciones} (${dinero(o.montoLiberado)}) --`));
+        orden.push(txt(`-- LIBERADO/QUITADO SIN COBRO: ${o.liberaciones} (${dinero(o.montoLiberado)}) --`));
         (o.listaLiberaciones || []).forEach(l => orden.push(txt(`${l.hora} ${l.mesa} ${dinero(l.monto)} - ${l.motivo}`)));
     }
     orden.push(txt(`-- VENTAS EN EFECTIVO: ${o.ordenesEfectivo || 0} --`));
@@ -1200,7 +1210,7 @@ async function cargarEstimadoCorte() {
     btn.innerText = "Cargando estimado...";
 
     await vaciarOutbox();
-    const r = await pedir('corte_estimado', { clave: claveEncargado }, TIMEOUT_CORTE_MS);
+    const r = await pedir('corte_estimado', { clave: claves.corte }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
         if (claveRechazada(r)) { cerrarModalCorte(); pedirClave('corte'); return; }
         document.getElementById("corteSubtitulo").innerText = "❌ No se pudo consultar el corte.";
@@ -1250,7 +1260,7 @@ async function confirmarCorte() {
     let idCorte = localStorage.getItem(LS.corte);
     if (!idCorte) { idCorte = generarUUID(); escribirLS(LS.corte, idCorte); }
 
-    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
+    const r = await pedir('corte_confirmar', { clave: claves.corte, idCorte, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
         btn.disabled = false;
         btn.innerText = "Hacer corte oficial y cerrar turno";
@@ -1536,8 +1546,49 @@ function cambiarCantidad(id, delta) {
     encolarOp('cantidad', mesaActual, { itemId: id, delta });
 }
 
-function eliminarItemNoImpreso(id) {
-    encolarOp('eliminar', mesaActual, { itemId: id });
+// Quitar un producto ya mandado al taquero o entregado: contraseña de corte + motivo
+let productoPorQuitar = null;   // { mesa, itemId }
+
+function pedirQuitarProducto(id) {
+    productoPorQuitar = { mesa: mesaActual, itemId: id };
+    pedirClave('eliminar');
+}
+
+async function quitarProductoConClave() {
+    const p = productoPorQuitar;
+    const clave = claveLiberar;
+    productoPorQuitar = null;
+    claveLiberar = null;
+    if (!p || !clave) return;
+    if (!conectado()) { alert("🔴 Sin conexión con la laptop. Para quitar un producto mandado o entregado se necesita conexión."); return; }
+    if (!(await vaciarOutbox())) { alert("⏳ Todavía hay cambios de este dispositivo sin llegar al servidor. Intenta de nuevo en unos segundos."); return; }
+    const base = servidor.mesas[p.mesa];
+    const it = base && base.items.find(i => i.id === p.itemId);
+    if (!it) { renderTodo(); alert("Ese producto ya no está en la cuenta."); return; }
+
+    let quitar = it.cant;
+    if (it.cant > 1) {
+        const txt = prompt(`"${it.nombre}" tiene ${it.cant}. ¿Cuántos quieres quitar? (1 a ${it.cant})`, String(it.cant));
+        if (txt === null) return;
+        quitar = parseInt(txt, 10);
+        if (!(quitar >= 1 && quitar <= it.cant)) { alert("Cantidad inválida. No se quitó nada."); return; }
+    }
+    const monto = quitar * it.precio;
+    const motivo = (prompt(`⚠️ Vas a quitar ${quitar}x ${it.nombre} de ${p.mesa} (${dinero(monto)}) SIN COBRAR.\nQuedará registrado en el corte.\n\nEscribe el motivo (ej. "se cayó", "pedido equivocado"):`) || '').trim();
+    if (!motivo) { alert("No se quitó nada: el motivo es obligatorio."); return; }
+
+    const r = await pedir('eliminar_producto', {
+        clave, opId: generarUUID(), mesa: p.mesa, itemId: it.id, cantVista: it.cant, quitar, motivo
+    }, 6000);
+    if (r.mesa) adoptarMesa(p.mesa, r.mesa);
+    renderTodo();
+    if (!r.ok) {
+        if (r.timeout) { alert("⚠️ El servidor de la laptop no respondió. Revisa que tenga el server.js nuevo."); return; }
+        if (r.error === 'Contraseña incorrecta') { productoPorQuitar = p; pedirClave('eliminar'); return; }
+        alert("⚠️ " + r.error);
+        return;
+    }
+    alert(`✅ Se quitó ${quitar}x ${it.nombre} (${dinero(r.monto)}). Quedó registrado para el corte.`);
 }
 
 // Botón "✓ Entregados": marca todo lo de la mesa como entregado; se puede usar en cada ronda
@@ -1583,12 +1634,11 @@ function renderComanda() {
                     <button type="button" class="btn-qty" onclick="cambiarCantidad('${id}', -1)">-</button>
                     <span style="min-width:14px;text-align:center;">${item.cant}</span>
                     <button type="button" class="btn-qty" onclick="cambiarCantidad('${id}', 1)">+</button>`;
-            } else if (!item.impreso && item.entregado) {
-                controles = `
-                    <button type="button" class="btn-del-item" title="Quitar artículo" onclick="eliminarItemNoImpreso('${id}')">✕</button>
-                    <span style="min-width:14px;text-align:center;">${item.cant}</span>`;
             } else {
-                controles = `<span style="min-width:14px;text-align:center;">${item.cant}</span>`;
+                // Ya mandado o entregado: se puede quitar con contraseña (queda registrado para el corte)
+                controles = `
+                    <button type="button" class="btn-del-item" title="Quitar (pide contraseña)" onclick="pedirQuitarProducto('${id}')">✕</button>
+                    <span style="min-width:14px;text-align:center;">${item.cant}</span>`;
             }
 
             return `
@@ -1843,3 +1893,4 @@ renderTodo();
 </script>
 </body>
 </html>
+
