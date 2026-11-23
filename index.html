@@ -507,7 +507,13 @@ function aplicarOp(m, op) {
         case 'listo':
         case 'entregado': {
             if (!ids.length) return { ok: false, error: 'No se indicaron productos' };
-            items.forEach(i => { if (ids.includes(i.id)) i[op.tipo] = true; });
+            // Al mandar al taquero se guarda la hora: así su pantalla ordena por quién llegó primero
+            const hora = Number(op.ahora) || Number(op.creadoEn) || Date.now();
+            items.forEach(i => {
+                if (!ids.includes(i.id)) return;
+                if (op.tipo === 'impreso' && !i.impreso) i.enviadoEn = hora;
+                i[op.tipo] = true;
+            });
             return { ok: true };
         }
         case 'personas': {
@@ -878,29 +884,61 @@ function setFiltroTaquero(f) {
     renderVistaTaquero();
 }
 
-function marcarListoDesdeTaquero(mesa) {
-    const visibles = pendientesCocina(mesa);
-    if (!visibles.length) return;
-    encolarOp('listo', mesa, { itemIds: visibles.map(i => i.id) });
+// Cada vez que se presiona "Comanda" es una RONDA: tarjeta propia, ordenadas de la más vieja a la más nueva
+let rondasTaquero = [];
+
+function armarRondasTaquero() {
+    const rondas = [];
+    MESAS_VALIDAS.forEach(mesa => {
+        const porHora = new Map();
+        pendientesCocina(mesa).forEach(it => {
+            const t = Number(it.enviadoEn) || 0;
+            if (!porHora.has(t)) porHora.set(t, []);
+            porHora.get(t).push(it);
+        });
+        porHora.forEach((items, t) => rondas.push({ mesa, t, items }));
+    });
+    rondas.sort((a, b) => a.t - b.t);
+    return rondas;
+}
+
+function marcarListoDesdeTaquero(k) {
+    const r = rondasTaquero[k];
+    if (!r || !r.items.length) return;
+    encolarOp('listo', r.mesa, { itemIds: r.items.map(i => i.id) });
 }
 
 function renderVistaTaquero() {
     if (!modoTaqueroActivo) return;
-    let mesasN = 0, pzas = 0;
-    const tarjetas = MESAS_VALIDAS.map(mesa => {
-        const pend = pendientesCocina(mesa);
-        if (!pend.length) return '';
-        const n = pend.reduce((a, i) => a + i.cant, 0);
-        mesasN++; pzas += n;
-        const grupos = agruparPorPersona(pend).map(g => `<div><span class="kds-persona">👤 Persona ${g.persona}</span>` +
+    rondasTaquero = armarRondasTaquero();
+    const ahora = Date.now();
+    let pzas = 0;
+    const tarjetas = rondasTaquero.map((r, k) => {
+        const n = r.items.reduce((a, i) => a + i.cant, 0);
+        pzas += n;
+        const min = r.t ? Math.max(0, Math.floor((ahora - r.t) / 60000)) : null;
+        const hora = r.t ? new Date(r.t).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+        const color = min === null ? 'var(--c3)' : (min >= 20 ? '#c0392b' : (min >= 10 ? '#d35400' : 'var(--c3)'));
+        const espera = min === null ? '' : (min === 0 ? 'recién llegó' : `hace ${min} min`);
+        const grupos = agruparPorPersona(r.items).map(g => `<div><span class="kds-persona">👤 Persona ${g.persona}</span>` +
             g.items.map(it => `<div class="kds-item"><div class="kds-cant">${it.cant}</div><div><div class="kds-nombre">${escaparHTML(it.nombre)}</div>${it.notas ? `<div class="kds-notas">${escaparHTML(it.notas)}</div>` : ''}</div></div>`).join('') +
             '</div>').join('');
-        return `<div class="kds-card"><div class="kds-head"><span>${escaparHTML(mesa)}</span><span>${n} pza(s)</span></div><div class="kds-body">${grupos}</div><button type="button" class="btn-kds-listo" onclick="marcarListoDesdeTaquero('${escaparHTML(mesa)}')">✓ Marcar ${escaparHTML(mesa)} lista para llevar</button></div>`;
-    }).filter(Boolean);
-    document.getElementById('taqueroResumen').innerText = mesasN ? `${mesasN} mesa(s) · ${pzas} producto(s) por sacar` : 'Sin comandas pendientes';
+        return `<div class="kds-card" style="border-color:${color}">` +
+            `<div class="kds-head" style="background:${color}"><span>#${k + 1} · ${escaparHTML(r.mesa)}</span><span>${n} pza(s)</span></div>` +
+            (r.t ? `<div style="padding:6px 14px;font-weight:800;color:${color};background:#f7faf9;border-bottom:1px solid #e3ece9;">🕒 ${hora} · ${espera}</div>` : '') +
+            `<div class="kds-body">${grupos}</div>` +
+            `<button type="button" class="btn-kds-listo" onclick="marcarListoDesdeTaquero(${k})">✓ Lista para llevar (${escaparHTML(r.mesa)})</button></div>`;
+    });
+    const mesasN = new Set(rondasTaquero.map(r => r.mesa)).size;
+    document.getElementById('taqueroResumen').innerText = tarjetas.length
+        ? `${tarjetas.length} comanda(s) de ${mesasN} mesa(s) · ${pzas} producto(s) por sacar · la #1 es la que lleva más tiempo`
+        : 'Sin comandas pendientes';
     document.getElementById('taqueroGrid').innerHTML = tarjetas.length ? tarjetas.join('') :
         '<div class="kds-vacio"><div style="font-size:2.5rem">🌮✨</div><h3>Todo al día en plancha</h3><p>Las órdenes mandadas por los meseros aparecerán aquí.</p></div>';
 }
+
+// Actualiza los minutos de espera cada 30 segundos
+setInterval(() => { if (modoTaqueroActivo) renderVistaTaquero(); }, 30000);
 
 // ==================== CONTRASEÑA (CORTE Y GASTOS) ====================
 function pedirClave(destino) {
@@ -1893,4 +1931,3 @@ renderTodo();
 </script>
 </body>
 </html>
-
