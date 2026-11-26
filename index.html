@@ -1105,9 +1105,9 @@ async function imprimirTicketCorte() {
     const { resumen: o, oficial, fecha } = corteParaImprimir;
     const txt = (nombre) => ({ cant: "", nombre, notas: "" });
     const linea = (nombre, monto) => txt(`${nombre}: ${monto}`);
-    // Mismo formato que el ticket que ya imprimía bien: líneas cortas y sin acentos
-    const orden = [txt(oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) ==")];
-    if (o.dia) orden.push(linea("Dia", o.dia.split("-").reverse().join("/")));
+    const orden = o.diaTexto
+        ? [txt(`== CORTE DEL DIA ${sinAcentos(o.diaTexto).toUpperCase()} ==`), txt(oficial ? "(GUARDADO EN SHEETS)" : "(PRELIMINAR - SIN GUARDAR)")]
+        : [txt(oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) ==")];
     orden.push(linea("Ordenes", String(o.ordenes || 0)));
     if (o.ordenes) orden.push(linea("Folios", `${o.primerFolio} a ${o.ultimoFolio}`));
     if (o.primeraFecha) orden.push(linea(o.diaTexto ? "Primera venta" : "Desde", o.primeraFecha));
@@ -1149,10 +1149,10 @@ async function imprimirTicketCorte() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 tipo: "CORTE",
-                numeroOrden: oficial ? "CORTE" : "ESTIMADO",
-                ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
+                numeroOrden: oficial ? "CORTE" : "PRELIMINAR",
+                ubicacion: o.diaTexto ? `CORTE DEL DIA ${sinAcentos(o.diaTexto)}` : (oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO"),
                 fecha,
-                orden: orden.map(x => ({ ...x, nombre: sinAcentos(x.nombre) })),
+                orden,
                 personas: [],
                 resumen: o,
                 oficial,
@@ -1892,4 +1892,4 @@ actualizarBadgeWS(conectado());
 renderTodo();
 </script>
 </body>
-</html>
+                    </html> 
