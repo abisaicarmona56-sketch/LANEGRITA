@@ -338,6 +338,9 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
         </div>
         <!-- Paso 1: conteo a ciegas (antes de ver lo que dice el sistema) -->
         <div id="corteConteo">
+            <p style="font-size:.85rem;color:#555;margin-bottom:2px;">Día del corte:</p>
+            <input type="date" id="corteDia" class="input-clave" onchange="alCambiarDiaCorte()">
+            <p id="corteDiaAviso" style="display:none;font-size:.8rem;color:#d35400;font-weight:700;margin:-4px 0 8px;">📅 Día anterior: el conteo es opcional (solo para consultar o reimprimir).</p>
             <p style="font-size:.88rem;color:#555;margin-bottom:8px;">Cuenta <strong>todo el efectivo de la caja</strong> (billetes, monedas y el fondo) <strong>antes</strong> de ver los totales del sistema.</p>
             <p style="font-size:.85rem;color:#555;margin-bottom:2px;">Fondo de caja con el que se abrió ($):</p>
             <input type="number" id="corteFondo" class="input-clave" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
@@ -1175,6 +1178,11 @@ function abrirModalCorte() {
     document.getElementById("corteConteo").style.display = "block";
     document.getElementById("corteResultado").style.display = "none";
     document.getElementById("corteBloqueo").style.display = "none";
+    const hoy = diaNegocio(new Date());
+    const inputDia = document.getElementById("corteDia");
+    inputDia.value = hoy;
+    inputDia.max = hoy;
+    alCambiarDiaCorte();
     document.getElementById("corteFondo").value = localStorage.getItem(LS.fondo) || "";
     document.getElementById("corteContado").value = "";
     const btn = document.getElementById("btnConfirmarCorte");
@@ -1184,13 +1192,26 @@ function abrirModalCorte() {
     setTimeout(() => document.getElementById(document.getElementById("corteFondo").value ? "corteContado" : "corteFondo").focus(), 100);
 }
 
+let corteDiaElegido = "";   // 'yyyy-mm-dd'
+
+function alCambiarDiaCorte() {
+    const hoy = diaNegocio(new Date());
+    const el = document.getElementById("corteDia");
+    if (!el.value || el.value > hoy) el.value = hoy;
+    document.getElementById("corteDiaAviso").style.display = el.value < hoy ? "block" : "none";
+}
+
 function verCorte() {
+    const hoy = diaNegocio(new Date());
+    corteDiaElegido = document.getElementById("corteDia").value || hoy;
+    if (corteDiaElegido > hoy) corteDiaElegido = hoy;
+    const esHoy = corteDiaElegido === hoy;
     const fondo = leerMonto("corteFondo");
     const contado = leerMonto("corteContado");
     if (Number.isNaN(fondo) || Number.isNaN(contado)) { alert("Revisa las cantidades: solo números mayores o iguales a 0."); return; }
-    if (contado === null) { alert("Escribe cuánto efectivo contaste en la caja."); return; }
+    if (contado === null && esHoy) { alert("Escribe cuánto efectivo contaste en la caja."); return; }
     corteConteo = { fondo: fondo || 0, contado };
-    escribirLS(LS.fondo, String(corteConteo.fondo));
+    if (esHoy) escribirLS(LS.fondo, String(corteConteo.fondo));
     document.getElementById("corteConteo").style.display = "none";
     document.getElementById("corteResultado").style.display = "block";
     cargarEstimadoCorte();
@@ -1212,7 +1233,7 @@ async function cargarEstimadoCorte() {
     btn.innerText = "Cargando estimado...";
 
     await vaciarOutbox();
-    const r = await pedir('corte_estimado', { clave: claveEncargado }, TIMEOUT_CORTE_MS);
+    const r = await pedir('corte_estimado', { clave: claveEncargado, dia: corteDiaElegido }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
         if (claveRechazada(r)) { cerrarModalCorte(); pedirClave('corte'); return; }
         document.getElementById("corteSubtitulo").innerText = "❌ No se pudo consultar el corte.";
@@ -1228,7 +1249,12 @@ async function cargarEstimadoCorte() {
     corteEstimadoActual = s;
     mostrarResumenCorte(s);
     let sub;
-    if (s.diaTexto) {
+    const esHoyCorte = !s.dia || s.dia === diaNegocio(new Date());
+    if (s.dia && corteDiaElegido && s.dia !== corteDiaElegido) {
+        sub = `⚠️ El servidor de la laptop no está actualizado: se muestra ${s.diaTexto} en lugar del día que elegiste.`;
+    } else if (s.diaTexto && !esHoyCorte) {
+        sub = `📅 Corte del ${s.diaTexto} (día anterior) · ${s.ordenes} orden(es)${s.ordenes ? ` (folio ${s.primerFolio} a ${s.ultimoFolio})` : ''}`;
+    } else if (s.diaTexto) {
         sub = s.ordenes === 0 && s.totalGastos === 0
             ? `📅 ${s.diaTexto}: aún no hay ventas ni gastos hoy.`
             : `📅 Corte de HOY ${s.diaTexto} · ${s.ordenes} orden(es)${s.ordenes ? ` (folio ${s.primerFolio} a ${s.ultimoFolio})` : ''}${s.primeraFecha ? ' · primera venta ' + s.primeraFecha : ''}`;
@@ -1261,7 +1287,10 @@ async function confirmarCorte() {
     if (modoBotonCorte === 'reintentar') { cargarEstimadoCorte(); return; }
     if (modoBotonCorte !== 'confirmar') return;
     const diaTxt = corteEstimadoActual && corteEstimadoActual.diaTexto ? corteEstimadoActual.diaTexto : "hoy";
-    if (!confirm(`¿Guardar el corte del día ${diaTxt} con tu conteo de caja?\n\nSe recalcula con TODAS las ventas de hoy. Si después hay más ventas hoy, puedes volver a guardar el corte.`)) return;
+    const pasado = corteEstimadoActual && corteEstimadoActual.dia && corteEstimadoActual.dia !== diaNegocio(new Date());
+    if (!confirm(pasado
+        ? `¿Guardar en Sheets el corte del día ANTERIOR ${diaTxt}?\n\nQuedará una fila nueva en la pestaña Cortes con el conteo que escribiste (o sin conteo).`
+        : `¿Guardar el corte del día ${diaTxt} con tu conteo de caja?\n\nSe recalcula con TODAS las ventas de hoy. Si después hay más ventas hoy, puedes volver a guardar el corte.`)) return;
 
     const btn = document.getElementById("btnConfirmarCorte");
     btn.disabled = true;
@@ -1270,7 +1299,7 @@ async function confirmarCorte() {
     let idCorte = localStorage.getItem(LS.corte);
     if (!idCorte) { idCorte = generarUUID(); escribirLS(LS.corte, idCorte); }
 
-    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
+    const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte, dia: corteDiaElegido, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
         btn.disabled = false;
         btn.innerText = "💾 Guardar corte del día en Sheets";
