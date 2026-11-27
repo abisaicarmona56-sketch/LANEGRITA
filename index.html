@@ -148,7 +148,13 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
             <option value="De pie 4">De pie 4</option>
             <option value="De pie 5">De pie 5</option>
             <option value="Barra">Barra</option>
-            <option value="Para Llevar">Para Llevar</option>
+            <option value="Para Llevar 1">Para Llevar 1</option>
+            <option value="Para Llevar 2">Para Llevar 2</option>
+            <option value="Para Llevar 3">Para Llevar 3</option>
+            <option value="Para Llevar 4">Para Llevar 4</option>
+            <option value="Para Llevar 5">Para Llevar 5</option>
+            <option value="Para Llevar 6">Para Llevar 6</option>
+            <option value="Para Llevar 7">Para Llevar 7</option>
         </select>
     </div>
 
@@ -403,7 +409,8 @@ const sinAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 const MESAS_VALIDAS = [
     "Mesa 1", "Mesa 2", "Mesa 3", "Mesa 4", "Mesa 5", "Mesa 6", "Mesa 7",
     "De pie 1", "De pie 2", "De pie 3", "De pie 4", "De pie 5",
-    "Barra", "Para Llevar"
+    "Barra",
+    "Para Llevar 1", "Para Llevar 2", "Para Llevar 3", "Para Llevar 4", "Para Llevar 5", "Para Llevar 6", "Para Llevar 7"
 ];
 
 const TIPOS_CARNE = ["Maciza","Costilla","Buche","Surtido","Cuerito","Barriga","Hígado","Trompa","Oreja","Lengua","Chamorro"];
@@ -459,10 +466,12 @@ const PRODUCTOS = [
     { id: 406, cat: 'bebidas', nombre: 'Sangría Preparada', precio: 45, esComida: false, llevaCarne: false },
     { id: 407, cat: 'bebidas', nombre: 'Agua natural', precio: 25, esComida: false, llevaCarne: false },
     // Postres
-    { id: 501, cat: 'postres', nombre: 'Pastel', precio: 40, esComida: false, llevaCarne: false },
-    { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 80, esComida: false, llevaCarne: false },
-    { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 35, esComida: false, llevaCarne: false },
-    { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 38, esComida: false, llevaCarne: false },
+    { id: 501, cat: 'postres', nombre: 'Pastel', precio: 50, esComida: false, llevaCarne: false },
+    { id: 504, cat: 'postres', nombre: 'Pastel de Coñac', precio: 75, esComida: false, llevaCarne: false },
+    { id: 502, cat: 'postres', nombre: 'Duraznos con crema', precio: 40, esComida: false, llevaCarne: false },
+    { id: 503, cat: 'postres', nombre: 'Pay de limón', precio: 45, esComida: false, llevaCarne: false },
+    { id: 505, cat: 'postres', nombre: 'Gelatina de agua', precio: 35, esComida: false, llevaCarne: false },
+    { id: 506, cat: 'postres', nombre: 'Gelatina de leche', precio: 45, esComida: false, llevaCarne: false },
     // Promociones
     { id: 601, cat: 'promos', nombre: 'Promo: Orden Tacos + Refresco', sub: 'Lunes y Martes', precio: 110, esComida: true, llevaCarne: true, llevaRefresco: true, esPromo: true },
     { id: 602, cat: 'promos', nombre: 'Promo: Torta + Refresco', sub: 'Miércoles y Jueves', precio: 75, esComida: true, llevaCarne: true, llevaRefresco: true, esPromo: true },
@@ -1105,9 +1114,9 @@ async function imprimirTicketCorte() {
     const { resumen: o, oficial, fecha } = corteParaImprimir;
     const txt = (nombre) => ({ cant: "", nombre, notas: "" });
     const linea = (nombre, monto) => txt(`${nombre}: ${monto}`);
-    const orden = o.diaTexto
-        ? [txt(`== CORTE DEL DIA ${sinAcentos(o.diaTexto).toUpperCase()} ==`), txt(oficial ? "(GUARDADO EN SHEETS)" : "(PRELIMINAR - SIN GUARDAR)")]
-        : [txt(oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) ==")];
+    // Mismo formato que el ticket que ya imprimía bien: líneas cortas y sin acentos
+    const orden = [txt(oficial ? "== CORTE DE CAJA OFICIAL ==" : "== CORTE ESTIMADO (NO CERRADO) ==")];
+    if (o.dia) orden.push(linea("Dia", o.dia.split("-").reverse().join("/")));
     orden.push(linea("Ordenes", String(o.ordenes || 0)));
     if (o.ordenes) orden.push(linea("Folios", `${o.primerFolio} a ${o.ultimoFolio}`));
     if (o.primeraFecha) orden.push(linea(o.diaTexto ? "Primera venta" : "Desde", o.primeraFecha));
@@ -1149,10 +1158,10 @@ async function imprimirTicketCorte() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 tipo: "CORTE",
-                numeroOrden: oficial ? "CORTE" : "PRELIMINAR",
-                ubicacion: o.diaTexto ? `CORTE DEL DIA ${sinAcentos(o.diaTexto)}` : (oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO"),
+                numeroOrden: oficial ? "CORTE" : "ESTIMADO",
+                ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
                 fecha,
-                orden,
+                orden: orden.map(x => ({ ...x, nombre: sinAcentos(x.nombre) })),
                 personas: [],
                 resumen: o,
                 oficial,
@@ -1892,4 +1901,4 @@ actualizarBadgeWS(conectado());
 renderTodo();
 </script>
 </body>
-                    </html> 
+</html>
