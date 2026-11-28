@@ -105,6 +105,10 @@ header h1{font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;ali
 .btn-filtro-kds.active{background:var(--c2);color:#fff}
 .taquero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .kds-card{background:#fff;border-radius:12px;border:2px solid var(--c1);overflow:hidden}
+.kds-card.tarde{border-color:#c0392b}
+.kds-card.tarde .kds-head{background:#922b21}
+.kds-turno{background:#fff;color:var(--c3);border-radius:6px;padding:0 8px;margin-right:8px;font-weight:900}
+.kds-hora{font-size:.8rem;font-weight:700;opacity:.9}
 .kds-head{background:var(--c3);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;font-weight:800}
 .kds-body{padding:12px 14px}
 .kds-persona{font-size:.78rem;font-weight:800;color:var(--c3);background:#e8f4f1;padding:3px 8px;border-radius:5px;margin:8px 0 4px;display:inline-block}
@@ -518,7 +522,13 @@ function aplicarOp(m, op) {
             items.splice(k, 1);
             return { ok: true };
         }
-        case 'impreso':
+        case 'impreso': {
+            // Guarda la HORA en que se mandó al taquero (la del servidor) para atender por orden de llegada
+            if (!ids.length) return { ok: false, error: 'No se indicaron productos' };
+            const hora = Number(op.horaServidor) || Number(op.creadoEn) || Date.now();
+            items.forEach(i => { if (ids.includes(i.id) && !i.impreso) { i.impreso = true; i.impresoEn = hora; } });
+            return { ok: true };
+        }
         case 'listo':
         case 'entregado': {
             if (!ids.length) return { ok: false, error: 'No se indicaron productos' };
@@ -849,6 +859,7 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { renderTodo(); procesarOutbox(); }
 });
 setInterval(() => { if (outbox.length && conectado()) procesarOutbox(); }, 5000);
+setInterval(() => { if (modoTaqueroActivo) renderVistaTaquero(); }, 30000); // actualiza los minutos de espera
 
 // ==================== RENDER GENERAL ====================
 function renderTodo() {
@@ -892,26 +903,48 @@ function setFiltroTaquero(f) {
     renderVistaTaquero();
 }
 
-function marcarListoDesdeTaquero(mesa) {
-    const visibles = pendientesCocina(mesa);
-    if (!visibles.length) return;
-    encolarOp('listo', mesa, { itemIds: visibles.map(i => i.id) });
+// Cada comanda mandada es una tarjeta. Se ordenan por la HORA en que se mandaron (la primera que llegó va primero),
+// sin importar la mesa. Si una mesa manda una segunda ronda, esa ronda va en su propio lugar de la fila.
+const MINUTOS_TARDE = 10;
+function rondasCocina() {
+    const rondas = [];
+    MESAS_VALIDAS.forEach(mesa => {
+        const porHora = {};
+        pendientesCocina(mesa).forEach(it => {
+            const t = Number(it.impresoEn) || 0;
+            (porHora[t] = porHora[t] || []).push(it);
+        });
+        Object.keys(porHora).forEach(t => rondas.push({ mesa, t: Number(t), items: porHora[t] }));
+    });
+    rondas.sort((a, b) => a.t - b.t || MESAS_VALIDAS.indexOf(a.mesa) - MESAS_VALIDAS.indexOf(b.mesa));
+    return rondas;
+}
+
+function marcarListoRonda(mesa, t) {
+    const ids = pendientesCocina(mesa).filter(i => (Number(i.impresoEn) || 0) === Number(t)).map(i => i.id);
+    if (!ids.length) return;
+    encolarOp('listo', mesa, { itemIds: ids });
 }
 
 function renderVistaTaquero() {
     if (!modoTaqueroActivo) return;
-    let mesasN = 0, pzas = 0;
-    const tarjetas = MESAS_VALIDAS.map(mesa => {
-        const pend = pendientesCocina(mesa);
-        if (!pend.length) return '';
-        const n = pend.reduce((a, i) => a + i.cant, 0);
-        mesasN++; pzas += n;
-        const grupos = agruparPorPersona(pend).map(g => `<div><span class="kds-persona">👤 Persona ${g.persona}</span>` +
+    const rondas = rondasCocina();
+    const ahora = Date.now();
+    let pzas = 0;
+    const tarjetas = rondas.map((r, k) => {
+        const n = r.items.reduce((a, i) => a + i.cant, 0);
+        pzas += n;
+        const min = r.t ? Math.max(0, Math.floor((ahora - r.t) / 60000)) : null;
+        const hora = r.t ? new Date(r.t).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+        const tarde = min !== null && min >= MINUTOS_TARDE;
+        const grupos = agruparPorPersona(r.items).map(g => `<div><span class="kds-persona">👤 Persona ${g.persona}</span>` +
             g.items.map(it => `<div class="kds-item"><div class="kds-cant">${it.cant}</div><div><div class="kds-nombre">${escaparHTML(it.nombre)}</div>${it.notas ? `<div class="kds-notas">${escaparHTML(it.notas)}</div>` : ''}</div></div>`).join('') +
             '</div>').join('');
-        return `<div class="kds-card"><div class="kds-head"><span>${escaparHTML(mesa)}</span><span>${n} pza(s)</span></div><div class="kds-body">${grupos}</div><button type="button" class="btn-kds-listo" onclick="marcarListoDesdeTaquero('${escaparHTML(mesa)}')">✓ Marcar ${escaparHTML(mesa)} lista para llevar</button></div>`;
-    }).filter(Boolean);
-    document.getElementById('taqueroResumen').innerText = mesasN ? `${mesasN} mesa(s) · ${pzas} producto(s) por sacar` : 'Sin comandas pendientes';
+        return `<div class="kds-card ${tarde ? 'tarde' : ''}"><div class="kds-head"><span><span class="kds-turno">${k + 1}</span>${escaparHTML(r.mesa)}</span>` +
+            `<span class="kds-hora">${hora ? `${hora} · hace ${min} min` : ''} · ${n} pza(s)</span></div><div class="kds-body">${grupos}</div>` +
+            `<button type="button" class="btn-kds-listo" onclick="marcarListoRonda('${escaparHTML(r.mesa)}', ${r.t})">✓ Marcar ${escaparHTML(r.mesa)} lista para llevar</button></div>`;
+    });
+    document.getElementById('taqueroResumen').innerText = rondas.length ? `${rondas.length} comanda(s) en fila · ${pzas} producto(s) por sacar · la #1 es la que llegó primero` : 'Sin comandas pendientes';
     document.getElementById('taqueroGrid').innerHTML = tarjetas.length ? tarjetas.join('') :
         '<div class="kds-vacio"><div style="font-size:2.5rem">🌮✨</div><h3>Todo al día en plancha</h3><p>Las órdenes mandadas por los meseros aparecerán aquí.</p></div>';
 }
@@ -1037,6 +1070,11 @@ async function guardarGasto() {
 // Paso 1: la encargada cuenta el efectivo SIN ver el sistema (conteo a ciegas).
 // Paso 2: se muestran los totales, lo que DEBE haber en caja y la diferencia.
 let corteConteo = null;   // { fondo, contado }
+// Id del corte: vive solo mientras está abierta la ventana del corte y para el mismo día + conteo.
+// (Antes se guardaba en la tablet y, si una respuesta se perdía, al otro día se reusaba y el corte nuevo NO se guardaba)
+let idCorteActual = null;
+let llaveIdCorte = "";
+try { localStorage.removeItem(LS.corte); } catch (e) { /* nada */ }
 
 function ponerCorte(campos) {
     Object.entries(campos).forEach(([id, txt]) => { document.getElementById(id).innerText = txt; });
@@ -1157,7 +1195,9 @@ async function imprimirTicketCorte() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                tipo: "CORTE",
+                // Se manda como "CUENTA": es la parte del programa de impresión que sí imprime completo
+                // (con tipo "CORTE" el programa de la laptop solo imprime el encabezado)
+                tipo: "CUENTA",
                 numeroOrden: oficial ? "CORTE" : "ESTIMADO",
                 ubicacion: oficial ? "CORTE DE CAJA" : "CORTE ESTIMADO",
                 fecha,
@@ -1180,6 +1220,8 @@ async function imprimirTicketCorte() {
 }
 
 function abrirModalCorte() {
+    idCorteActual = null;
+    llaveIdCorte = "";
     corteEstimadoActual = null;
     corteConteo = null;
     modoBotonCorte = null;
@@ -1305,8 +1347,10 @@ async function confirmarCorte() {
     btn.disabled = true;
     btn.innerText = "Guardando corte en Sheets...";
 
-    let idCorte = localStorage.getItem(LS.corte);
-    if (!idCorte) { idCorte = generarUUID(); escribirLS(LS.corte, idCorte); }
+    // Si se reintenta (mismo día y mismo conteo) se usa el mismo id: así no se guarda dos veces
+    const llave = `${corteDiaElegido}|${corteConteo.fondo}|${corteConteo.contado}`;
+    if (!idCorteActual || llaveIdCorte !== llave) { idCorteActual = generarUUID(); llaveIdCorte = llave; }
+    const idCorte = idCorteActual;
 
     const r = await pedir('corte_confirmar', { clave: claveEncargado, idCorte, dia: corteDiaElegido, fondo: corteConteo.fondo, contado: corteConteo.contado }, TIMEOUT_CORTE_MS);
     if (!r.ok) {
@@ -1316,7 +1360,8 @@ async function confirmarCorte() {
         alert("❌ No se pudo realizar el corte.\nDetalle: " + r.error + "\nNo se perdió nada: puedes reintentar.");
         return;
     }
-    try { localStorage.removeItem(LS.corte); } catch (e) { /* nada */ }
+    idCorteActual = null;
+    llaveIdCorte = "";
 
     // Compatibilidad: con el server.js ANTERIOR el fondo y lo contado no llegan a Sheets;
     // se usa el conteo de esta pantalla para mostrar e imprimir el cuadre.
